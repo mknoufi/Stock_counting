@@ -4,11 +4,12 @@ Database Inspection Script for Lavanya E-Mart Stock Verification System
 Run this to view all database contents in a readable format
 """
 
-from motor.motor_asyncio import AsyncIOMotorClient
 import asyncio
 import os
-from dotenv import load_dotenv
 from pathlib import Path
+
+from dotenv import load_dotenv
+from motor.motor_asyncio import AsyncIOMotorClient
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -110,9 +111,15 @@ async def inspect_database():
     print("📈 STATISTICS")
     print("=" * 80)
     total_variance = sum(abs(line["variance"]) for line in count_lines)
-    approved_lines = len([l for l in count_lines if l["status"] == "approved"])
-    rejected_lines = len([l for l in count_lines if l["status"] == "rejected"])
-    pending_lines = len([l for l in count_lines if l["status"] == "pending"])
+    approved_lines = len(
+        [line_entry for line_entry in count_lines if line_entry["status"] == "approved"]
+    )
+    rejected_lines = len(
+        [line_entry for line_entry in count_lines if line_entry["status"] == "rejected"]
+    )
+    pending_lines = len(
+        [line_entry for line_entry in count_lines if line_entry["status"] == "pending"]
+    )
 
     print(f"  Total Users: {len(users)}")
     print(f"  Total ERP Items: {len(items)}")

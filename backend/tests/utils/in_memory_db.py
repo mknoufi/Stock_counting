@@ -11,10 +11,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional
 
+from backend.auth.dependencies import init_auth_dependencies
 from backend.services.activity_log import ActivityLogService
 from backend.services.error_log import ErrorLogService
 from backend.services.refresh_token import RefreshTokenService
-from backend.auth.dependencies import init_auth_dependencies
 
 
 def _match_condition(value: Any, condition: Dict[str, Any]) -> bool:
@@ -124,7 +124,7 @@ class InMemoryCollection:
         return None
 
     async def insert_one(self, document: Dict[str, Any], *args, **kwargs) -> InsertOneResult:
-        print(f"DEBUG: insert_one called")
+        print("DEBUG: insert_one called")
         doc_copy = copy.deepcopy(document)
         self._ensure_id(doc_copy)
         self._documents.append(doc_copy)
@@ -174,7 +174,11 @@ class InMemoryCollection:
     async def count_documents(self, filter_query: Optional[Dict[str, Any]] = None) -> int:
         return sum(1 for doc in self._documents if _match_filter(doc, filter_query))
 
-    def find(self, filter_query: Optional[Dict[str, Any]] = None, projection: Optional[Dict[str, int]] = None):
+    def find(
+        self,
+        filter_query: Optional[Dict[str, Any]] = None,
+        projection: Optional[Dict[str, int]] = None,
+    ):
         results = []
         for doc in self._documents:
             if _match_filter(doc, filter_query):
@@ -221,6 +225,7 @@ def setup_server_with_in_memory_db(monkeypatch) -> InMemoryDatabase:
     """
 
     import server as server_module
+
     print("DEBUG: Imported server module")
 
     fake_db = InMemoryDatabase()
@@ -240,14 +245,15 @@ def setup_server_with_in_memory_db(monkeypatch) -> InMemoryDatabase:
 
     monkeypatch.setattr(server_module, "migration_manager", _NoOpMigrationManager())
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
-    
+
     # Mock SQL Connector
-    from unittest.mock import MagicMock, AsyncMock
+    from unittest.mock import AsyncMock, MagicMock
+
     mock_sql = MagicMock()
     mock_sql.connect.return_value = None
     mock_sql.test_connection.return_value = False
     monkeypatch.setattr(server_module, "sql_connector", mock_sql)
-    
+
     # Mock DatabaseHealthService
     mock_health = MagicMock()
     mock_health.start = MagicMock()
@@ -257,7 +263,7 @@ def setup_server_with_in_memory_db(monkeypatch) -> InMemoryDatabase:
     # Patch the existing instance if it exists
     if hasattr(server_module, "database_health_service"):
         monkeypatch.setattr(server_module, "database_health_service", mock_health)
-    
+
     # Mock AutoSyncManager
     mock_auto_sync = MagicMock()
     mock_auto_sync.start = AsyncMock()
@@ -270,13 +276,16 @@ def setup_server_with_in_memory_db(monkeypatch) -> InMemoryDatabase:
     mock_export_service = MagicMock()
     mock_export_service.start = MagicMock()
     mock_export_service.stop = MagicMock()
-    monkeypatch.setattr(server_module, "ScheduledExportService", MagicMock(return_value=mock_export_service))
+    monkeypatch.setattr(
+        server_module, "ScheduledExportService", MagicMock(return_value=mock_export_service)
+    )
     if hasattr(server_module, "scheduled_export_service"):
         monkeypatch.setattr(server_module, "scheduled_export_service", mock_export_service)
-    
+
     # Mock CacheService to avoid Redis connection attempts
     from backend.services.cache_service import CacheService
-    mock_cache = CacheService(redis_url=None) # Force in-memory
+
+    mock_cache = CacheService(redis_url=None)  # Force in-memory
     mock_cache.initialize = AsyncMock()
     monkeypatch.setattr(server_module, "cache_service", mock_cache)
 
@@ -285,6 +294,7 @@ def setup_server_with_in_memory_db(monkeypatch) -> InMemoryDatabase:
 
     # Manually initialize verification API since lifespan might not run
     from backend.api.item_verification_api import init_verification_api
+
     init_verification_api(fake_db)
 
     init_auth_dependencies(fake_db, server_module.SECRET_KEY, server_module.ALGORITHM)
@@ -309,4 +319,3 @@ def setup_server_with_in_memory_db(monkeypatch) -> InMemoryDatabase:
     _seed_user("admin", "admin123", "Administrator", "admin")
 
     return fake_db
-

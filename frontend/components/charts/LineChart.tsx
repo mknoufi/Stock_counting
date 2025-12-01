@@ -72,7 +72,7 @@ export const LineChart: React.FC<LineChartProps> = ({
   });
 
   // Generate polyline path
-  const pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
 
   // Generate grid lines
   const gridLines = [];
@@ -237,4 +237,3 @@ const styles = StyleSheet.create({
     color: modernColors.text.secondary,
   },
 });
-

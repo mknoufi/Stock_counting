@@ -44,19 +44,16 @@ export default function ActivityLogsScreen() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
 
-  useEffect(() => {
-    loadLogs();
-    loadStats();
-  }, []);
 
-  const loadLogs = async (pageNum: number = 1) => {
+
+  const loadLogs = React.useCallback(async (pageNum: number = 1) => {
     try {
       setLoading(pageNum === 1);
       const response = await getActivityLogs(pageNum, 50);
       if (pageNum === 1) {
         setLogs(response.activities || []);
       } else {
-        setLogs([...logs, ...(response.activities || [])]);
+        setLogs(prevLogs => [...prevLogs, ...(response.activities || [])]);
       }
       setHasMore(response.pagination?.has_next || false);
     } catch (error: any) {
@@ -65,16 +62,21 @@ export default function ActivityLogsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [showToast]);
 
-  const loadStats = async () => {
+  const loadStats = React.useCallback(async () => {
     try {
       const statsData = await getActivityStats();
       setStats(statsData);
     } catch (error: any) {
       console.error('Failed to load stats:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadLogs();
+    loadStats();
+  }, [loadLogs, loadStats]);
 
   const handleRefresh = () => {
     setRefreshing(true);

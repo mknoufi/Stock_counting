@@ -4,8 +4,8 @@ Detects aging stock, slow-moving items, and price discount requirements
 Based on barcode ranges and patterns
 """
 
-from typing import Dict, Any, List, TypedDict, Optional
 import logging
+from typing import Any, Dict, List, Optional, TypedDict
 
 logger = logging.getLogger(__name__)
 

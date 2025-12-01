@@ -5,15 +5,16 @@ Self-diagnosing, self-healing error detection and resolution
 
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional, Callable
+import re
+import traceback
+from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from enum import Enum
-import traceback
-import re
-from collections import defaultdict, deque
+from typing import Any, Callable, Dict, List, Optional
+
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from backend.utils.result_types import Result
-from motor.motor_asyncio import AsyncIOMotorDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -89,14 +90,14 @@ class AutoDiagnosisService:
 
     def __init__(self, mongo_db: Optional[AsyncIOMotorDatabase] = None):
         self.mongo_db = mongo_db
-        self._error_patterns = self._load_error_patterns()
-        self._error_history = deque(maxlen=1000)  # Last 1000 errors
-        self._diagnosis_cache = {}
-        self._auto_fix_registry = self._register_auto_fixes()
-        self._health_checks = []
+        self._error_patterns: Dict[str, Dict[str, Any]] = self._load_error_patterns()
+        self._error_history: deque[Dict[str, Any]] = deque(maxlen=1000)  # Last 1000 errors
+        self._diagnosis_cache: Dict[str, DiagnosisResult] = {}
+        self._auto_fix_registry: Dict[str, Callable] = self._register_auto_fixes()
+        self._health_checks: List[Callable] = []
 
         # Error pattern recognition
-        self._pattern_recognizers = {
+        self._pattern_recognizers: Dict[ErrorCategory, Callable] = {
             ErrorCategory.DATABASE: self._diagnose_database_error,
             ErrorCategory.NETWORK: self._diagnose_network_error,
             ErrorCategory.AUTHENTICATION: self._diagnose_auth_error,
@@ -589,7 +590,9 @@ class AutoDiagnosisService:
         try:
             context = context or {}
             result = await asyncio.to_thread(diagnosis.auto_fix, diagnosis.error, context)
-            return result
+            if isinstance(result, Result):
+                return result
+            return Result.success(result)
         except Exception as e:
             logger.error(f"Auto-fix failed: {str(e)}")
             return Result.error(e, f"Auto-fix execution failed: {str(e)}")
@@ -615,8 +618,8 @@ class AutoDiagnosisService:
             }
 
         # Category breakdown
-        categories = defaultdict(int)
-        severities = defaultdict(int)
+        categories: Dict[str, int] = defaultdict(int)
+        severities: Dict[str, int] = defaultdict(int)
         auto_fixable_count = 0
 
         for error_entry in recent_errors:
@@ -627,7 +630,7 @@ class AutoDiagnosisService:
                 auto_fixable_count += 1
 
         # Common errors
-        error_counts = defaultdict(int)
+        error_counts: Dict[str, int] = defaultdict(int)
         for error_entry in recent_errors:
             error_type = type(error_entry["error"]).__name__
             error_counts[error_type] += 1
@@ -647,7 +650,7 @@ class AutoDiagnosisService:
 
     async def health_check(self) -> Dict[str, Any]:
         """Comprehensive health check with auto-diagnosis"""
-        health_report = {
+        health_report: Dict[str, Any] = {
             "status": "healthy",
             "timestamp": datetime.utcnow().isoformat(),
             "checks": {},
@@ -683,3 +686,30 @@ class AutoDiagnosisService:
     def register_health_check(self, check_func: Callable):
         """Register a health check function"""
         self._health_checks.append(check_func)
+
+
+async def run_nightly_diagnosis():
+    """Run nightly diagnosis and health check"""
+    print(f"Starting nightly diagnosis at {datetime.utcnow().isoformat()}")
+    service = AutoDiagnosisService()
+
+    # Add some basic health checks
+    async def check_db():
+        # Placeholder for actual DB check
+        return "connected"
+
+    service.register_health_check(check_db)
+
+    report = await service.health_check()
+    print("Health Report:")
+    print(report)
+
+    # Here you would typically send this report to an admin or log it
+    if report["status"] != "healthy":
+        print("WARNING: System health is degraded!")
+        for diagnosis in report["diagnoses"]:
+            print(f" - {diagnosis['category']}: {diagnosis['root_cause']}")
+
+
+if __name__ == "__main__":
+    asyncio.run(run_nightly_diagnosis())

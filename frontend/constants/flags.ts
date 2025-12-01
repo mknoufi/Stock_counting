@@ -4,21 +4,21 @@
 export const flags = {
   enableVirtualizedLists: true,
   enableHaptics: true,
-  enableNewScanner: false,
+  enableAnimations: true,
   enableDebugPanel: false,
   // Experimental high-performance theming via react-native-unistyles
-  enableUnistyles: false,
   // Roadmap gates
   enableSwipeActions: false,
-  enableAnimations: false,
-  enableNotes: false,
-  enableHelpResources: false,
+  enableUnistyles: false, // Disabled for Expo Go compatibility
+  enableMockData: false,
+  enableSentry: false,
   enableStorybook: false,
   enableDeepLinks: false,
-  enableOfflineQueue: false,
-  enableAnalytics: false, // Set to true for Sentry error tracking
+  enableOfflineQueue: true,
+  enableAnalytics: true, // Set to true for Sentry error tracking
   enableReactotron: false,
-  enableMMKV: true, // Enabled: 30x faster than AsyncStorage
+  enableNotes: false,
+  enableMMKV: true,
 } as const;
 
 export type Flags = typeof flags;

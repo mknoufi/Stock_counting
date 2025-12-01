@@ -3,14 +3,15 @@ Input Sanitization Middleware (2024/2025 Best Practice)
 Sanitizes input to prevent XSS and injection attacks
 """
 
-import re
 import html
 import logging
+import re
 from typing import Any, Dict
+
+from fastapi import status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from fastapi import status
 
 logger = logging.getLogger(__name__)
 

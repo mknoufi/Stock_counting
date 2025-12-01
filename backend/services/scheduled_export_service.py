@@ -4,14 +4,15 @@ Automated periodic exports of data to CSV/Excel
 """
 
 import asyncio
-import logging
-from datetime import datetime, timedelta
-from typing import Optional, Dict, List, Any
-from enum import Enum
 import csv
 import io
-from motor.motor_asyncio import AsyncIOMotorDatabase
+import logging
+from datetime import datetime, timedelta, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional
+
 from bson import ObjectId
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class ScheduledExportService:
         format: ExportFormat,
         filters: Optional[Dict[str, Any]] = None,
         email_recipients: Optional[List[str]] = None,
-        created_by: str = None,
+        created_by: Optional[str] = None,
     ) -> str:
         """Create a new export schedule"""
         schedule_doc = {
@@ -57,8 +58,8 @@ class ScheduledExportService:
             "last_run": None,
             "next_run": self._calculate_next_run(frequency),
             "created_by": created_by,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
             "run_count": 0,
             "error_count": 0,
         }
@@ -70,7 +71,7 @@ class ScheduledExportService:
 
     async def update_export_schedule(self, schedule_id: str, updates: Dict[str, Any]) -> bool:
         """Update an existing export schedule"""
-        updates["updated_at"] = datetime.utcnow()
+        updates["updated_at"] = datetime.now(timezone.utc)
 
         # Recalculate next_run if frequency changed
         if "frequency" in updates:
@@ -138,7 +139,7 @@ class ScheduledExportService:
                 "file_content": file_content,
                 "file_extension": file_extension,
                 "row_count": len(data),
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
                 "size_bytes": len(file_content.encode("utf-8")),
             }
 
@@ -150,11 +151,11 @@ class ScheduledExportService:
                 {"_id": schedule.get("_id") or ObjectId(schedule.get("id"))},
                 {
                     "$set": {
-                        "last_run": datetime.utcnow(),
+                        "last_run": datetime.now(timezone.utc),
                         "next_run": self._calculate_next_run(
                             ExportFrequency(schedule["frequency"])
                         ),
-                        "updated_at": datetime.utcnow(),
+                        "updated_at": datetime.now(timezone.utc),
                     },
                     "$inc": {"run_count": 1},
                 },
@@ -328,7 +329,7 @@ class ScheduledExportService:
 
     def _calculate_next_run(self, frequency: ExportFrequency) -> datetime:
         """Calculate next run time based on frequency"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         if frequency == ExportFrequency.DAILY:
             # Run at midnight UTC
@@ -376,7 +377,7 @@ class ScheduledExportService:
         while self._running:
             try:
                 # Find schedules due for execution
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
                 due_schedules = await self.db.export_schedules.find(
                     {"enabled": True, "next_run": {"$lte": now}}
                 ).to_list(length=100)
@@ -402,7 +403,7 @@ class ScheduledExportService:
         self._task = asyncio.create_task(self._run_scheduler())
         logger.info("Scheduled export service started")
 
-    def stop(self):
+    async def stop(self):
         """Stop the scheduled export service"""
         if not self._running:
             return
@@ -410,4 +411,8 @@ class ScheduledExportService:
         self._running = False
         if self._task:
             self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
         logger.info("Scheduled export service stopped")

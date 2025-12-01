@@ -3,14 +3,15 @@ Database Connection Optimizer
 Optimizes database connections and queries for maximum performance
 """
 
-import logging
 import asyncio
-from typing import Dict, Any, List
+import logging
+import time
+from functools import wraps
+from typing import Any, Dict, List
+
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo import ReadPreference, WriteConcern
 from pymongo.errors import ConnectionFailure
-import time
-from functools import wraps
 
 logger = logging.getLogger(__name__)
 
@@ -45,39 +46,39 @@ class DatabaseOptimizer:
         # Query performance tracking
         self._query_stats: Dict[str, Dict[str, Any]] = {}
         self._slow_query_threshold = 1.0  # seconds
-        
+
         # Index optimization strategies
         self.index_strategies = {
-            'items': [
-                ('barcode', 1),  # Unique index for fast lookups
-                ('category', 1),
-                ('location', 1),
-                ('status', 1),
-                ('name', 'text'),  # Text index for search
-                ('created_at', -1),  # Descending for recent items first
-                ([('category', 1), ('status', 1)], None),  # Compound index
-                ([('location', 1), ('status', 1)], None),  # Compound index
+            "items": [
+                ("barcode", 1),  # Unique index for fast lookups
+                ("category", 1),
+                ("location", 1),
+                ("status", 1),
+                ("name", "text"),  # Text index for search
+                ("created_at", -1),  # Descending for recent items first
+                ([("category", 1), ("status", 1)], None),  # Compound index
+                ([("location", 1), ("status", 1)], None),  # Compound index
             ],
-            'users': [
-                ('username', 1),  # Unique index
-                ('email', 1),  # Unique index
-                ('role', 1),
-                ('active', 1),
-                ([('role', 1), ('active', 1)], None),  # Compound index
+            "users": [
+                ("username", 1),  # Unique index
+                ("email", 1),  # Unique index
+                ("role", 1),
+                ("active", 1),
+                ([("role", 1), ("active", 1)], None),  # Compound index
             ],
-            'audit_logs': [
-                ('timestamp', -1),  # Descending for recent logs first
-                ('user_id', 1),
-                ('action', 1),
-                ('item_id', 1),
-                ([('user_id', 1), ('timestamp', -1)], None),  # Compound index
-            ]
+            "audit_logs": [
+                ("timestamp", -1),  # Descending for recent logs first
+                ("user_id", 1),
+                ("action", 1),
+                ("item_id", 1),
+                ([("user_id", 1), ("timestamp", -1)], None),  # Compound index
+            ],
         }
 
     def optimize_client(self) -> AsyncIOMotorClient:
         """
         Configure MongoDB client with optimal settings
-        
+
         Note: Motor client options are set at initialization time.
         This method validates that the client was created with optimal settings
         and logs warnings if settings don't match expectations.
@@ -86,7 +87,7 @@ class DatabaseOptimizer:
             # Motor client options are immutable after creation, so we verify
             # that the client was created with the expected settings
             # The actual optimization happens when the client is instantiated
-            
+
             # Verify client has expected attributes (Motor doesn't expose all options)
             client_options = {
                 "maxPoolSize": self.max_pool_size,
@@ -111,13 +112,9 @@ class DatabaseOptimizer:
                     f"min_pool={self.min_pool_size}, "
                     f"timeouts={self.server_selection_timeout_ms}ms/{self.connect_timeout_ms}ms"
                 )
-                logger.debug(
-                    f"Client optimization settings: {client_options}"
-                )
+                logger.debug(f"Client optimization settings: {client_options}")
             except Exception as verify_error:
-                logger.warning(
-                    f"Could not verify client configuration: {verify_error}"
-                )
+                logger.warning(f"Could not verify client configuration: {verify_error}")
 
             return self.mongo_client
 

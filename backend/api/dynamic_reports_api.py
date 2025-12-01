@@ -3,15 +3,16 @@ Dynamic Report Generation API
 Endpoints for creating and generating custom reports
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+import io
+import logging
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from typing import List, Optional, Any, Dict
 from pydantic import BaseModel, Field
+
 from backend.auth import get_current_user
 from backend.services.dynamic_report_service import DynamicReportService
-
-import logging
-import io
 
 logger = logging.getLogger(__name__)
 

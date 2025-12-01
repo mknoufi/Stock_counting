@@ -1,4 +1,4 @@
-import { normalizeBarcode, validateBarcode, validateMRP, validateQuantity, validateSessionName } from '../../utils/validation';
+import { normalizeBarcode, validateBarcode, validateMRP, validateQuantity, validateSessionName } from '@/utils/validation';
 
 describe('validation utils', () => {
   it('validates session names', () => {
@@ -30,4 +30,3 @@ describe('validation utils', () => {
     expect(validateMRP('-1').valid).toBe(false);
   });
 });
-

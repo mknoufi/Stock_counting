@@ -1,15 +1,19 @@
+# ruff: noqa: E402
+
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import sys
+
+
 import logging
 from pathlib import Path
+
+
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings as PydanticBaseSettings
 from typing import List, Optional, Dict, Any, TypeVar, Generic
 import uuid
 from datetime import datetime, timedelta
@@ -17,18 +21,96 @@ import time
 import jwt
 from passlib.context import CryptContext
 from contextlib import asynccontextmanager
-from functools import wraps
+
 from bson import ObjectId
 import re
 
-from backend.utils.result import Result, Ok, Fail
-from backend.services.errors import (
+# Add project root to path for direct execution (debugging)
+# This allows the file to be run directly for testing/debugging
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from backend.utils.result import Result, Ok, Fail  # noqa: E402
+from backend.services.errors import (  # noqa: E402
     DatabaseError,
     ValidationError,
     AuthenticationError,
     AuthorizationError,
     NotFoundError,
     RateLimitExceededError,
+)
+from backend.utils.logging_config import setup_logging  # noqa: E402
+from backend.config import settings  # noqa: E402
+from backend.api.admin_control_api import admin_control_router  # noqa: E402
+
+# Production services
+from backend.services.connection_pool import SQLServerConnectionPool  # noqa: E402
+from backend.services.cache_service import CacheService  # noqa: E402
+from backend.services.rate_limiter import RateLimiter, ConcurrentRequestHandler  # noqa: E402
+from backend.services.monitoring_service import MonitoringService  # noqa: E402
+from backend.services.database_health import DatabaseHealthService  # noqa: E402
+from backend.services.database_optimizer import DatabaseOptimizer  # noqa: E402
+from backend.db.migrations import MigrationManager  # noqa: E402
+from backend.sql_server_connector import SQLServerConnector  # noqa: E402
+from backend.error_messages import get_error_message  # noqa: E402
+from backend.services.refresh_token import RefreshTokenService  # noqa: E402
+from backend.services.batch_operations import BatchOperationsService  # noqa: E402
+from backend.services.activity_log import ActivityLogService  # noqa: E402
+from backend.services.error_log import ErrorLogService  # noqa: E402
+from backend.db.runtime import set_db, set_client  # noqa: E402
+from backend.services.runtime import set_cache_service, set_refresh_token_service  # noqa: E402
+from backend.api_mapping import router as mapping_router  # noqa: E402
+from backend.auth.dependencies import init_auth_dependencies  # noqa: E402
+from backend.api.self_diagnosis_api import self_diagnosis_router  # noqa: E402
+from backend.api.health import health_router  # noqa: E402
+from backend.api.item_verification_api import (  # noqa: E402
+    init_verification_api,
+    verification_router,
+)  # noqa: E402
+
+# New feature API routers
+from backend.api.permissions_api import permissions_router  # noqa: E402
+from backend.api.exports_api import exports_router  # noqa: E402
+from backend.api.metrics_api import metrics_router, set_monitoring_service  # noqa: E402
+from backend.api.sync_status_api import sync_router, set_auto_sync_manager  # noqa: E402
+from backend.api.sync_management_api import (  # noqa: E402
+    sync_management_router,
+    set_change_detection_service,
+)
+from backend.api.security_api import security_router  # noqa: E402
+from backend.api.variance_api import router as variance_router  # noqa: E402
+from backend.api.erp_api import router as erp_router, init_erp_api  # noqa: E402
+from backend.api.auth import router as auth_router  # noqa: E402
+from backend.api.enhanced_item_api import enhanced_item_router as items_router, init_enhanced_api  # noqa: E402
+
+# New feature services
+from backend.api.sync_conflicts_api import sync_conflicts_router  # noqa: E402
+from backend.services.scheduled_export_service import ScheduledExportService  # noqa: E402
+from backend.services.sync_conflicts_service import SyncConflictsService  # noqa: E402
+
+# Utils
+from backend.utils.api_utils import result_to_response  # noqa: E402
+
+# Import optional services
+try:
+    from backend.services.enrichment_service import EnrichmentService
+    from backend.api.enrichment_api import init_enrichment_api, enrichment_router
+except ImportError:
+    EnrichmentService = None  # type: ignore
+    init_enrichment_api = None  # type: ignore
+    enrichment_router = None  # type: ignore
+
+# Global service instances
+scheduled_export_service = None
+sync_conflicts_service = None
+
+# Setup logging
+logger = setup_logging(
+    log_level=settings.LOG_LEVEL,
+    log_format=settings.LOG_FORMAT,
+    log_file=settings.LOG_FILE or "app.log",
+    app_name=settings.APP_NAME,
 )
 
 T = TypeVar("T")
@@ -50,162 +132,6 @@ class ApiResponse(BaseModel, Generic[T]):
         return cls(success=False, error=error)
 
 
-# Helper function to convert Result to API response
-def handle_result(result: Result[T, E], success_status: int = 200) -> Dict[str, Any]:
-    """Convert a Result type to a proper API response."""
-    if result.is_ok:
-        return {"success": True, "data": result.unwrap(), "error": None}
-    else:
-        # Try common error attributes for Result
-        error = getattr(result, "err", None) or getattr(result, "_error", None)
-        if error is None:
-            logger.error("Result has no error attribute - this should not happen")
-            error = Exception("Unknown error")
-        if isinstance(error, (AuthenticationError, AuthorizationError)):
-            status_code = 401 if isinstance(error, AuthenticationError) else 403
-            raise HTTPException(
-                status_code=status_code,
-                detail={
-                    "success": False,
-                    "error": {
-                        "message": str(error),
-                        "code": error.__class__.__name__,
-                        "details": getattr(error, "details", {}),
-                    },
-                },
-            )
-        elif isinstance(error, ValidationError):
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "success": False,
-                    "error": {
-                        "message": str(error),
-                        "code": "VALIDATION_ERROR",
-                        "details": getattr(error, "details", {}),
-                    },
-                },
-            )
-        elif isinstance(error, NotFoundError):
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "success": False,
-                    "error": {
-                        "message": str(error),
-                        "code": "NOT_FOUND",
-                        "details": getattr(error, "details", {}),
-                    },
-                },
-            )
-        elif isinstance(error, RateLimitExceededError):
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "success": False,
-                    "error": {
-                        "message": str(error),
-                        "code": "RATE_LIMIT_EXCEEDED",
-                        "retry_after": getattr(error, "retry_after", None),
-                        "details": getattr(error, "details", {}),
-                    },
-                },
-            )
-        else:
-            # Log unexpected errors
-            error_id = str(uuid.uuid4())
-            logger.error(
-                f"Unexpected error (ID: {error_id}): {str(error)}\n"
-                f"Type: {type(error).__name__}\n"
-                f"Traceback: {getattr(error, '__traceback__', 'No traceback')}"
-            )
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "success": False,
-                    "error": {
-                        "message": "An unexpected error occurred",
-                        "code": "INTERNAL_SERVER_ERROR",
-                        "error_id": error_id,
-                        "details": {
-                            "error_type": type(error).__name__,
-                            "error_message": str(error),
-                        },
-                    },
-                },
-            )
-
-
-# Decorator for result handling
-def result_to_response(success_status: int = 200):
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            try:
-                result = await func(*args, **kwargs)
-                if isinstance(result, Result):
-                    return handle_result(result, success_status)
-                return result
-            except HTTPException:
-                raise
-            except Exception as e:
-                # Convert unhandled exceptions to Result and then to API response
-                return handle_result(Fail(e), 500)
-
-        return wrapper
-
-    return decorator
-
-
-# Production services
-from backend.services.connection_pool import SQLServerConnectionPool
-from backend.services.cache_service import CacheService
-from backend.services.rate_limiter import RateLimiter, ConcurrentRequestHandler
-from backend.services.monitoring_service import MonitoringService
-from backend.services.database_health import DatabaseHealthService
-from backend.services.database_optimizer import DatabaseOptimizer
-from backend.middleware.performance_middleware import (
-    PerformanceMiddleware,
-    CacheMiddleware,
-)
-from backend.middleware.rate_limit_middleware import RateLimitMiddleware
-from backend.middleware.compression_middleware import CompressionMiddleware
-from backend.middleware.request_size_limit import RequestSizeLimitMiddleware
-from backend.middleware.security_headers import SecurityHeadersMiddleware
-from backend.middleware.request_id import RequestIDMiddleware
-from backend.middleware.input_sanitization import InputSanitizationMiddleware
-from backend.db.migrations import MigrationManager
-from backend.sql_server_connector import SQLServerConnector
-from backend.error_messages import get_error_message
-from backend.services.refresh_token import RefreshTokenService
-from backend.services.batch_operations import BatchOperationsService
-from backend.services.activity_log import ActivityLogService
-from backend.services.error_log import ErrorLogService
-from backend.api_mapping import router as mapping_router
-from backend.auth.dependencies import (
-    init_auth_dependencies,
-    get_current_user_async as get_current_user,
-)
-from backend.api.self_diagnosis_api import self_diagnosis_router
-from backend.api.health import health_router
-from backend.api.item_verification_api import init_verification_api, verification_router
-
-# New feature API routers
-from backend.api.permissions_api import permissions_router
-from backend.api.exports_api import exports_router
-from backend.api.sync_conflicts_api import sync_conflicts_router
-from backend.api.metrics_api import metrics_router, set_monitoring_service
-from backend.api.sync_status_api import sync_router, set_auto_sync_manager
-from backend.api.sync_management_api import (
-    sync_management_router,
-    set_change_detection_service,
-)
-from backend.api.security_api import security_router
-
-# New feature services
-from backend.services.scheduled_export_service import ScheduledExportService
-from backend.services.sync_conflicts_service import SyncConflictsService
-
 RUNNING_UNDER_PYTEST = "pytest" in sys.modules
 
 ROOT_DIR = Path(__file__).parent
@@ -217,49 +143,56 @@ else:
     logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 # SECURITY: Helper function to sanitize user input for logging
 def sanitize_for_logging(user_input: str, max_length: int = 50) -> str:
     """
     Sanitize user input before logging to prevent log injection attacks.
-    
+
     Args:
         user_input: The user input to sanitize
         max_length: Maximum length to allow (default: 50)
-        
+
     Returns:
         Sanitized string safe for logging
     """
     if not user_input:
         return ""
-    
+
     # Convert to string and truncate
     sanitized = str(user_input)[:max_length]
-    
+
     # Remove newlines, carriage returns, and control characters that could break log format
-    sanitized = re.sub(r'[\r\n\x00-\x1f\x7f-\x9f]', '', sanitized)
-    
+    sanitized = re.sub(r"[\r\n\x00-\x1f\x7f-\x9f]", "", sanitized)
+
     # Remove potentially dangerous characters for log parsers
-    sanitized = re.sub(r'[<>&"\'`]', '', sanitized)
-    
+    sanitized = re.sub(r'[<>&"\'`]', "", sanitized)
+
     return sanitized
 
+
 # SECURITY: Helper function for safe error responses
-def create_safe_error_response(status_code: int, message: str, error_code: str = "INTERNAL_ERROR", log_details: str = None) -> HTTPException:
+def create_safe_error_response(
+    status_code: int,
+    message: str,
+    error_code: str = "INTERNAL_ERROR",
+    log_details: Optional[str] = None,
+) -> HTTPException:
     """
     Create a safe error response that doesn't leak sensitive information.
-    
+
     Args:
         status_code: HTTP status code
         message: Safe user-facing error message
         error_code: Application-specific error code
         log_details: Detailed error for logging only (not sent to client)
-        
+
     Returns:
         HTTPException with sanitized error information
     """
     if log_details:
         logger.error(f"Internal error ({error_code}): {log_details}")
-    
+
     return HTTPException(
         status_code=status_code,
         detail={
@@ -267,9 +200,10 @@ def create_safe_error_response(status_code: int, message: str, error_code: str =
             "error": {
                 "message": message,
                 "code": error_code,
-            }
-        }
+            },
+        },
     )
+
 
 # Load configuration with validation
 try:
@@ -304,9 +238,9 @@ mongo_client_options = dict(
     retryReads=True,
 )
 
-client = AsyncIOMotorClient(
+client: AsyncIOMotorClient = AsyncIOMotorClient(
     mongo_url,
-    **mongo_client_options,
+    **mongo_client_options,  # type: ignore
 )
 # Use DB_NAME from settings (database name should not be in URL for this setup)
 db = client[settings.DB_NAME]
@@ -351,13 +285,13 @@ except Exception as e:
     logger.warning(f"Argon2 not available, using bcrypt-only: {str(e)}")
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # SECURITY: settings from backend.config already enforce strong secrets
-SECRET_KEY = settings.JWT_SECRET
+SECRET_KEY: str = settings.JWT_SECRET or "secret-key-fallback"
 ALGORITHM = settings.JWT_ALGORITHM
 security = HTTPBearer(auto_error=False)
 
 # Initialize production services
 # Enhanced Connection pool (if using SQL Server)
-connection_pool = None
+connection_pool: Any = None
 if (
     getattr(settings, "USE_CONNECTION_POOL", True)
     and settings.SQL_SERVER_HOST
@@ -367,6 +301,7 @@ if (
         # Try to use enhanced connection pool first
         try:
             from backend.services.enhanced_connection_pool import EnhancedSQLServerConnectionPool
+
             connection_pool = EnhancedSQLServerConnectionPool(
                 host=settings.SQL_SERVER_HOST,
                 port=settings.SQL_SERVER_PORT,
@@ -454,7 +389,7 @@ change_detection_sync = None
 set_change_detection_service(change_detection_sync)
 
 # Auto-sync manager - automatically syncs when SQL Server becomes available
-from backend.services.auto_sync_manager import AutoSyncManager
+from backend.services.auto_sync_manager import AutoSyncManager  # noqa: E402
 
 auto_sync_manager = None
 
@@ -470,9 +405,15 @@ error_log_service = ErrorLogService(db)
 
 # Create the main app with lifespan
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI):  # noqa: C901
     # Startup
     logger.info("🚀 Starting application...")
+
+    # Initialize runtime globals
+    set_client(client)
+    set_db(db)
+    set_cache_service(cache_service)
+    set_refresh_token_service(refresh_token_service)
 
     # Initialize SQL Server connection if credentials are available
     try:
@@ -516,7 +457,9 @@ async def lifespan(app: FastAPI):
         error_type = type(e).__name__
         logger.error(f"❌ MongoDB is required but unavailable ({error_type}): {e}")
         logger.error("Application cannot start without MongoDB. Please ensure MongoDB is running.")
-        raise SystemExit(f"MongoDB is required but unavailable ({error_type}). Please start MongoDB and try again.")
+        raise SystemExit(
+            f"MongoDB is required but unavailable ({error_type}). Please start MongoDB and try again."
+        )
 
     # Initialize default users
     try:
@@ -576,12 +519,12 @@ async def lifespan(app: FastAPI):
         auto_sync_manager = None
 
     # Start ERP sync service (full sync) - legacy, kept for backward compatibility
-    if erp_sync_service:
-        try:
-            erp_sync_service.start()
-            logger.info("✓ ERP sync service started")
-        except Exception as e:
-            logger.error(f"Failed to start ERP sync service: {str(e)}")
+    # if erp_sync_service:
+    #     try:
+    #         erp_sync_service.start()
+    #         logger.info("✓ ERP sync service started")
+    #     except Exception as e:
+    #         logger.error(f"Failed to start ERP sync service: {str(e)}")
 
     # Change detection sync service is fully disabled for testing
 
@@ -617,6 +560,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to start scheduled export service: {str(e)}")
 
+    # Initialize enrichment service
+    if EnrichmentService is not None and init_enrichment_api is not None:
+        try:
+            enrichment_svc = EnrichmentService(db)
+            init_enrichment_api(enrichment_svc)
+            logger.info("✓ Enrichment service initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize enrichment service: {str(e)}")
+
     try:
         # Sync conflicts service
         sync_conflicts_service = SyncConflictsService(db)
@@ -630,6 +582,20 @@ async def lifespan(app: FastAPI):
         logger.info("✓ Monitoring service connected to metrics API")
     except Exception as e:
         logger.error(f"Failed to set monitoring service: {str(e)}")
+
+    try:
+        # Initialize ERP API
+        init_erp_api(db, cache_service)
+        logger.info("✓ ERP API initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize ERP API: {str(e)}")
+
+    try:
+        # Initialize Enhanced Item API
+        init_enhanced_api(db, cache_service, monitoring_service)
+        logger.info("✓ Enhanced Item API initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize Enhanced Item API: {str(e)}")
 
     try:
         # Initialize verification API
@@ -684,8 +650,8 @@ async def lifespan(app: FastAPI):
 
     # Verify Services
     services_running = []
-    if erp_sync_service:
-        services_running.append("ERP Sync")
+    # if erp_sync_service:
+    #     services_running.append("ERP Sync")
     if scheduled_export_service:
         services_running.append("Scheduled Export")
     if sync_conflicts_service:
@@ -721,24 +687,24 @@ async def lifespan(app: FastAPI):
     shutdown_tasks = []
 
     # Stop sync services
-    if erp_sync_service is not None:
-        erp_sync = erp_sync_service  # Type narrowing for Pyright
+    # if erp_sync_service is not None:
+    #     erp_sync = erp_sync_service  # Type narrowing for Pyright
 
-        async def stop_erp_sync():
-            try:
-                erp_sync.stop()
-                logger.info("✓ ERP sync service stopped")
-            except Exception as e:
-                logger.error(f"Error stopping ERP sync service: {str(e)}")
+    #     async def stop_erp_sync():
+    #         try:
+    #             erp_sync.stop()
+    #             logger.info("✓ ERP sync service stopped")
+    #         except Exception as e:
+    #             logger.error(f"Error stopping ERP sync service: {str(e)}")
 
-        shutdown_tasks.append(stop_erp_sync())
+    #     shutdown_tasks.append(stop_erp_sync())
 
     # Stop scheduled export service
     if scheduled_export_service:
 
         async def stop_export_service():
             try:
-                scheduled_export_service.stop()
+                await scheduled_export_service.stop()
                 logger.info("✓ Scheduled export service stopped")
             except Exception as e:
                 logger.error(f"Error stopping scheduled export service: {str(e)}")
@@ -748,7 +714,7 @@ async def lifespan(app: FastAPI):
     # Stop database health monitoring
     async def stop_health_monitoring():
         try:
-            database_health_service.stop()
+            await database_health_service.stop()
             logger.info("✓ Database health monitoring stopped")
         except Exception as e:
             logger.error(f"Error stopping database health monitoring: {str(e)}")
@@ -757,7 +723,6 @@ async def lifespan(app: FastAPI):
 
     # Stop auto-sync manager
     async def stop_auto_sync():
-        global auto_sync_manager
         if auto_sync_manager:
             try:
                 await auto_sync_manager.stop()
@@ -811,7 +776,9 @@ app = FastAPI(
 # Configure CORS from settings with environment-aware defaults
 _env = getattr(settings, "ENVIRONMENT", "development").lower()
 if getattr(settings, "CORS_ALLOW_ORIGINS", None):
-    _allowed_origins = [o.strip() for o in settings.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
+    _allowed_origins = [
+        o.strip() for o in (settings.CORS_ALLOW_ORIGINS or "").split(",") if o.strip()
+    ]
 elif _env == "development":
     # Base development origins (localhost variants)
     _allowed_origins = [
@@ -823,13 +790,15 @@ elif _env == "development":
     ]
     # Add additional dev origins from environment if configured
     if getattr(settings, "CORS_DEV_ORIGINS", None):
-        dev_origins = [o.strip() for o in settings.CORS_DEV_ORIGINS.split(",") if o.strip()]
+        dev_origins = [o.strip() for o in (settings.CORS_DEV_ORIGINS or "").split(",") if o.strip()]
         _allowed_origins.extend(dev_origins)
         logger.info(f"Added {len(dev_origins)} additional CORS origins from CORS_DEV_ORIGINS")
 else:
     _allowed_origins = []
     if not getattr(settings, "CORS_ALLOW_ORIGINS", None):
-        logger.warning("CORS_ALLOW_ORIGINS not configured for non-development environment; requests may be blocked")
+        logger.warning(
+            "CORS_ALLOW_ORIGINS not configured for non-development environment; requests may be blocked"
+        )
 
 app.add_middleware(
     CORSMiddleware,
@@ -838,40 +807,85 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=[
         "Accept",
-        "Accept-Language", 
+        "Accept-Language",
         "Content-Language",
         "Content-Type",
         "Authorization",
         "X-Requested-With",
-        "X-Request-ID"
+        "X-Request-ID",
     ],
 )
+
+# Add security headers middleware (OWASP best practices)
+try:
+    from backend.middleware.security_headers import SecurityHeadersMiddleware
+
+    # Enable security headers (strict CSP in production)
+    strict_csp = os.getenv("STRICT_CSP", "false").lower() == "true"
+    force_https = os.getenv("FORCE_HTTPS", "false").lower() == "true"
+
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        STRICT_CSP=strict_csp,
+        force_https=force_https,
+    )
+    logger.info("✓ Security headers middleware enabled")
+except Exception as e:
+    logger.warning(f"Security headers middleware not available: {str(e)}")
 
 # Create API router
 api_router = APIRouter()
 
 # Register all routers with the app
 app.include_router(health_router)  # Health check endpoints at /health/*
+app.include_router(health_router, prefix="/api")  # Alias for frontend compatibility
 app.include_router(permissions_router, prefix="/api")  # Permissions management
 app.include_router(exports_router, prefix="/api")  # Export functionality
-app.include_router(sync_conflicts_router, prefix="/api")  # Sync conflict handling
+# Include routers
+app.include_router(mapping_router, prefix="/api/mapping")  # API mappings
+app.include_router(auth_router, prefix="/api")
+app.include_router(items_router)  # Enhanced items API (has its own prefix /api/v2/erp/items)
 app.include_router(metrics_router, prefix="/api")  # Metrics and monitoring
 app.include_router(sync_router, prefix="/api")  # Sync status
 app.include_router(sync_management_router, prefix="/api")  # Sync management
-app.include_router(mapping_router, prefix="/api")  # API mappings
-app.include_router(self_diagnosis_router, prefix="/api")  # Self-diagnosis tools
+app.include_router(self_diagnosis_router, prefix="/api/diagnosis")  # Self-diagnosis tools
 app.include_router(security_router)  # Security dashboard (has its own prefix)
 app.include_router(verification_router)
+app.include_router(erp_router, prefix="/api")  # ERP endpoints
+app.include_router(variance_router, prefix="/api")  # Variance reasons and trendspoints
+app.include_router(admin_control_router)  # Admin control endpoints
+
+
+@app.get("/api/mapping/test_direct")
+def test_direct():
+    return {"status": "ok"}
+
+
+# Debug: Print all registered routes
+for route in app.routes:
+    if hasattr(route, "path"):
+        logger.info(f"Route: {route.path}")
 # Import and include Notes API router locally to avoid top-level import churn
 try:
-    from backend.api.notes_api import router as notes_router  # type: ignore
+    from backend.api.notes_api import router as notes_router
+
     app.include_router(notes_router, prefix="/api")  # Notes feature
+    app.include_router(sync_conflicts_router, prefix="/api")  # Sync conflicts feature
 except Exception as _e:
     logger.warning(f"Notes API router not available: {_e}")
+
+# Import and include Enrichment API router
+if enrichment_router:
+    try:
+        app.include_router(enrichment_router)  # Enrichment endpoints
+        logger.info("✓ Enrichment API router registered")
+    except Exception as _e:
+        logger.warning(f"Enrichment API router not available: {_e}")
 
 # Include API v2 router (upgraded endpoints)
 try:
     from backend.api.v2 import v2_router
+
     app.include_router(v2_router)
     logger.info("✓ API v2 router registered")
 except Exception as e:
@@ -880,29 +894,8 @@ except Exception as e:
 # Include routes defined on api_router
 app.include_router(api_router, prefix="/api")
 
-# Import JSONResponse and traceback for error handling
-from fastapi.responses import JSONResponse
-import traceback
-
 
 # Pydantic Models
-class ERPItem(BaseModel):
-    item_code: str
-    item_name: str
-    barcode: str
-    stock_qty: float
-    mrp: float
-    category: Optional[str] = None
-    subcategory: Optional[str] = None
-    warehouse: Optional[str] = None
-    uom_code: Optional[str] = None
-    uom_name: Optional[str] = None
-    floor: Optional[str] = None
-    rack: Optional[str] = None
-    verified: Optional[bool] = False
-    verified_by: Optional[str] = None
-    verified_at: Optional[datetime] = None
-    last_scanned_at: Optional[datetime] = None
 
 
 class UserInfo(BaseModel):
@@ -1014,7 +1007,7 @@ class UnknownItemCreate(BaseModel):
 
 
 # Helper functions
-def verify_password(plain_password: str, hashed_password: str) -> bool:
+def verify_password(plain_password: str, hashed_password: str) -> bool:  # noqa: C901
     """
     Verify a password against a hash using multiple fallback strategies.
 
@@ -1041,7 +1034,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         result = pwd_context.verify(plain_password, hashed_password)
         if result:
             logger.debug("Password verified using passlib CryptContext")
-        return result
+        return bool(result)
     except Exception as e:
         logger.debug(f"Passlib verification failed: {type(e).__name__}: {str(e)}")
 
@@ -1049,15 +1042,15 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         import bcrypt
 
-        if isinstance(hashed_password, str):
-            hash_bytes = hashed_password.encode("utf-8")
-            result = bcrypt.checkpw(password_bytes, hash_bytes)
-            if result:
-                logger.debug("Password verified using direct bcrypt")
-            return result
-        else:
-            logger.error(f"Password hash is not a string: {type(hashed_password)}")
-            return False
+        # if isinstance(hashed_password, str):
+        hash_bytes = hashed_password.encode("utf-8")
+        result = bcrypt.checkpw(password_bytes, hash_bytes)
+        if result:
+            logger.debug("Password verified using direct bcrypt")
+        return bool(result)
+        # else:
+        #     logger.error(f"Password hash is not a string: {type(hashed_password)}")
+        #     return False
     except ImportError:
         logger.error("bcrypt module not available - password verification cannot proceed")
         return False
@@ -1066,17 +1059,19 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+def get_password_hash(password: str) -> str:
+    """Hash a password using the configured context"""
+    return str(pwd_context.hash(password))
 
 
-def create_access_token(data: dict):
+def create_access_token(data: Dict[str, Any]) -> str:
+    """Create a JWT access token from user data"""
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-):
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> Dict[str, Any]:
     try:
         if credentials is None:
             error = get_error_message("AUTH_TOKEN_INVALID")
@@ -1120,7 +1115,7 @@ async def get_current_user(
                     "category": error["category"],
                 },
             )
-        return user
+        return dict(user)
     except jwt.ExpiredSignatureError:
         error = get_error_message("AUTH_TOKEN_EXPIRED")
         raise HTTPException(
@@ -1302,230 +1297,10 @@ async def init_mock_erp_data():
 
 
 # Routes
-@api_router.post("/auth/register", response_model=TokenResponse, status_code=201)
-async def register(user: UserRegister):
-    try:
-        # Check if user exists
-        existing = await db.users.find_one({"username": user.username})
-        if existing:
-            error = get_error_message("AUTH_USERNAME_EXISTS", {"username": user.username})
-            logger.warning(f"Registration attempt with existing username: {sanitize_for_logging(user.username)}")
-            raise HTTPException(
-                status_code=error["status_code"],
-                detail={
-                    "message": error["message"],
-                    "detail": error["detail"],
-                    "code": error["code"],
-                    "category": error["category"],
-                },
-            )
-
-        # Create user
-        hashed_password = get_password_hash(user.password)
-        user_doc = {
-            "username": user.username,
-            "hashed_password": hashed_password,
-            "full_name": user.full_name,
-            "role": user.role,
-            "is_active": True,
-            "permissions": [],
-            "created_at": datetime.utcnow(),
-        }
-        insert_result = await db.users.insert_one(user_doc)
-        user_doc["_id"] = insert_result.inserted_id
-        logger.info(f"User registered: {sanitize_for_logging(user.username)} ({sanitize_for_logging(user.role)})")
-
-        # Create access and refresh tokens
-        access_token = refresh_token_service.create_access_token(
-            {"sub": user.username, "role": user.role}
-        )
-        refresh_token = refresh_token_service.create_refresh_token(
-            {"sub": user.username, "role": user.role}
-        )
-
-        # Store refresh token in database
-        expires_at = datetime.utcnow() + timedelta(days=30)
-        await refresh_token_service.store_refresh_token(refresh_token, user.username, expires_at)
-
-        return {
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "token_type": "bearer",
-            "expires_in": 900,  # 15 minutes
-            "user": {
-                "id": str(user_doc["_id"]),
-                "username": user.username,
-                "full_name": user.full_name,
-                "role": user.role,
-                "email": None,
-                "is_active": True,
-                "permissions": [],
-            },
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        error = get_error_message("UNKNOWN_ERROR", {"operation": "register", "error": str(e)})
-        logger.error(f"Registration error: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=error["status_code"],
-            detail={
-                "message": error["message"],
-                "detail": f"{error['detail']} Original error: {str(e)}",
-                "code": error["code"],
-                "category": error["category"],
-            },
-        )
-
-
-@api_router.post("/auth/login", response_model=ApiResponse[TokenResponse])
-@result_to_response(success_status=200)
-async def login(credentials: UserLogin, request: Request) -> Result[Dict[str, Any], Exception]:
-    """
-    User login endpoint with enhanced security and monitoring.
-
-    Validates user credentials and returns an access token with refresh token.
-    Implements rate limiting, IP tracking, and detailed logging.
-    """
-    try:
-        logger.info("=== LOGIN ATTEMPT START ===")
-        logger.info(f"Username: {sanitize_for_logging(credentials.username)}")
-
-        client_ip = request.client.host if request.client else ""
-        logger.info(f"Client IP: {client_ip}")
-
-        # Check rate limiting
-        logger.debug(f"Checking rate limit for IP: {client_ip}")
-        rate_limit_result = await check_rate_limit(client_ip)
-        if rate_limit_result.is_err:
-            # Extract error from Result type
-            err = None
-            if hasattr(rate_limit_result, "unwrap_err"):
-                try:
-                    err = rate_limit_result.unwrap_err()
-                except Exception:
-                    pass
-            if err is None:
-                err = getattr(rate_limit_result, "err", None)
-            if err is None:
-                err = getattr(rate_limit_result, "_error", None)
-            if err is None:
-                err = RateLimitExceededError("Rate limit exceeded")
-
-            logger.warning(f"Rate limit exceeded for {client_ip}: {str(err)}")
-            # Return proper RateLimitExceededError
-            if isinstance(err, RateLimitExceededError):
-                return Fail(err)
-            return Fail(RateLimitExceededError(str(err)))
-        logger.debug("Rate limit check passed")
-
-        # Find user by username
-        logger.info(f"Finding user: {credentials.username}")
-        user_result = await find_user_by_username(credentials.username)
-        if user_result.is_err:
-            logger.error("User not found")
-            await log_failed_login_attempt(
-                username=credentials.username,
-                ip_address=client_ip,
-                user_agent=request.headers.get("user-agent"),
-                error="User not found",
-            )
-            return Fail(AuthenticationError("Incorrect username or password"))
-
-        user = user_result.unwrap()
-        logger.info("User found")
-
-        # Verify password
-        logger.info("Verifying password...")
-        hashed_pwd = user.get("hashed_password") or user.get("password")  # Legacy fallback
-        if not hashed_pwd:
-            logger.error("No hashed_password or password field found!")
-            return Fail(AuthenticationError("User account is corrupted. Please contact support."))
-
-        # Verify password with comprehensive error handling
-        password_valid = False
-        try:
-            password_valid = verify_password(credentials.password, hashed_pwd)
-        except Exception as e:
-            logger.error(f"Password verification raised exception: {type(e).__name__}: {str(e)}")
-            password_valid = False
-
-        if not password_valid:
-            logger.error("Password verification failed")
-            await log_failed_login_attempt(
-                username=credentials.username,
-                ip_address=client_ip,
-                user_agent=request.headers.get("user-agent"),
-                error="Invalid password",
-            )
-            return Fail(AuthenticationError("Incorrect username or password"))
-
-        # Auto-migrate legacy cleartext password field to hashed_password
-        if "password" in user and "hashed_password" not in user:
-            try:
-                await db.users.update_one(
-                    {"_id": user["_id"]},
-                    {
-                        "$set": {"hashed_password": get_password_hash(credentials.password)},
-                        "$unset": {"password": ""},
-                    },
-                )
-                logger.info("User password field migrated to hashed_password")
-            except Exception as migrate_err:
-                logger.warning(f"Failed to migrate legacy password field: {str(migrate_err)}")
-
-        logger.info("Password verified successfully")
-
-        # Check if user is active
-        if not user.get("is_active", True):
-            logger.error("User account is deactivated")
-            return Fail(AuthorizationError("Account is deactivated. Please contact support."))
-
-        logger.info("Generating tokens...")
-        # Generate tokens
-        tokens_result = await generate_auth_tokens(user, client_ip, request)
-        if tokens_result.is_err:
-            logger.error(f"Token generation failed: {tokens_result}")
-            return tokens_result
-
-        tokens = tokens_result.unwrap()
-        logger.info("Tokens generated successfully")
-
-        # Log successful login
-        await log_successful_login(user, client_ip, request)
-
-        # Reset failed login attempts counter
-        await cache_service.delete("login_attempts", client_ip)
-
-        logger.info("=== LOGIN SUCCESS ===")
-        # Prepare response - @result_to_response decorator will wrap this in ApiResponse
-        return Ok(
-            {
-                "access_token": tokens["access_token"],
-                "token_type": "bearer",
-                "expires_in": tokens["expires_in"],
-                "refresh_token": tokens["refresh_token"],
-                "user": {
-                    "id": str(user["_id"]),
-                    "username": user["username"],
-                    "full_name": user.get("full_name", ""),
-                    "role": user.get("role", "staff"),
-                    "email": user.get("email"),
-                    "is_active": user.get("is_active", True),
-                    "permissions": user.get("permissions", []),
-                },
-            }
-        )
-    except Exception as e:
-        logger.error("=== LOGIN EXCEPTION ===")
-        logger.error(f"Exception type: {type(e).__name__}")
-        logger.error(f"Exception message: {str(e)}")
-        logger.error("Traceback:", exc_info=True)
-        return Fail(e)
 
 
 # Helper functions for login
-async def check_rate_limit(ip_address: str) -> Result[None, Exception]:
+async def check_rate_limit(ip_address: str) -> Result[bool, Exception]:
     """
     Check if the IP has exceeded the login attempt limit.
 
@@ -1590,16 +1365,24 @@ async def generate_auth_tokens(
     """Generate access and refresh tokens with error handling."""
     try:
         # Generate access token
-        access_token_expires = timedelta(minutes=getattr(settings, "ACCESS_TOKEN_EXPIRE_MINUTES", 15))
-        access_token = create_access_token({"sub": user["username"], "role": user.get("role", "staff")})
+        access_token_expires = timedelta(
+            minutes=getattr(settings, "ACCESS_TOKEN_EXPIRE_MINUTES", 15)
+        )
+        access_token = create_access_token(
+            {"sub": user["username"], "role": user.get("role", "staff")}
+        )
 
         # Generate refresh token using service
         refresh_payload = {"sub": user["username"], "role": user.get("role", "staff")}
         refresh_token = refresh_token_service.create_refresh_token(refresh_payload)
-        refresh_token_expires = datetime.utcnow() + timedelta(days=getattr(settings, "REFRESH_TOKEN_EXPIRE_DAYS", 30))
+        refresh_token_expires = datetime.utcnow() + timedelta(
+            days=getattr(settings, "REFRESH_TOKEN_EXPIRE_DAYS", 30)
+        )
 
         # Store refresh token via service
-        await refresh_token_service.store_refresh_token(refresh_token, user["username"], refresh_token_expires)
+        await refresh_token_service.store_refresh_token(
+            refresh_token, user["username"], refresh_token_expires
+        )
 
         return Ok(
             {
@@ -1661,19 +1444,6 @@ async def log_successful_login(user: Dict[str, Any], ip_address: str, request: R
         # )
     except Exception as e:
         logger.error(f"Failed to log successful login: {str(e)}")
-
-
-@api_router.get("/auth/me")
-async def get_me(current_user: dict = Depends(get_current_user)):
-    from backend.auth.permissions import get_user_permissions
-
-    return {
-        "username": current_user["username"],
-        "full_name": current_user["full_name"],
-        "role": current_user["role"],
-        "permissions": get_user_permissions(current_user),
-        "is_active": current_user.get("is_active", True),
-    }
 
 
 @api_router.post("/auth/refresh", response_model=ApiResponse[TokenResponse])
@@ -1741,7 +1511,9 @@ async def refresh_token(request: Request) -> Result[Dict[str, Any], Exception]:
 
 
 @api_router.post("/auth/logout")
-async def logout(request: Request, current_user: dict = Depends(get_current_user)):
+async def logout(
+    request: Request, current_user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
     """
     Logout user by revoking their refresh token.
 
@@ -1769,8 +1541,8 @@ async def logout(request: Request, current_user: dict = Depends(get_current_user
 async def create_session(
     request: Request,
     session_data: SessionCreate,
-    current_user: dict = Depends(get_current_user),
-):
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Session:
     # Input validation and sanitization
     warehouse = session_data.warehouse.strip()
     if not warehouse:
@@ -1778,10 +1550,12 @@ async def create_session(
     if len(warehouse) < 2:
         raise HTTPException(status_code=400, detail="Warehouse name must be at least 2 characters")
     if len(warehouse) > 100:
-        raise HTTPException(status_code=400, detail="Warehouse name must be less than 100 characters")
+        raise HTTPException(
+            status_code=400, detail="Warehouse name must be less than 100 characters"
+        )
     # Sanitize warehouse name (remove potentially dangerous characters)
-    warehouse = warehouse.replace('<', '').replace('>', '').replace('"', '').replace("'", '')
-    
+    warehouse = warehouse.replace("<", "").replace(">", "").replace('"', "").replace("'", "")
+
     session = Session(
         warehouse=warehouse,
         staff_user=current_user["username"],
@@ -1806,10 +1580,10 @@ async def create_session(
 
 @api_router.get("/sessions", response_model=Dict[str, Any])
 async def get_sessions(
-    current_user: dict = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-):
+) -> Dict[str, Any]:
     """Get sessions with pagination"""
     skip = (page - 1) * page_size
 
@@ -2045,7 +1819,7 @@ async def get_sessions_analytics(current_user: dict = Depends(get_current_user))
 
         # Execute aggregations
         overall = await db.sessions.aggregate(pipeline).to_list(1)
-        by_date = await db.sessions.aggregate(date_pipeline).to_list(None)
+        by_date = await db.sessions.aggregate(date_pipeline).to_list(None)  # type: ignore
         by_warehouse = await db.sessions.aggregate(warehouse_pipeline).to_list(None)
         by_staff = await db.sessions.aggregate(staff_pipeline).to_list(None)
 
@@ -2082,7 +1856,10 @@ async def get_session_by_id(
             raise HTTPException(status_code=404, detail="Session not found")
 
         # Check permissions
-        if current_user["role"] != "supervisor" and session.get("staff_user") != current_user["username"]:
+        if (
+            current_user["role"] != "supervisor"
+            and session.get("staff_user") != current_user["username"]
+        ):
             raise HTTPException(status_code=403, detail="Access denied")
 
         return Session(**session)
@@ -2093,452 +1870,7 @@ async def get_session_by_id(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@api_router.get("/variance-reasons")
-async def get_variance_reasons(
-    current_user: dict = Depends(get_current_user),
-):
-    """Get list of variance reasons"""
-    # Return common variance reasons
-    return {
-        "reasons": [
-            {"id": "damaged", "label": "Damaged"},
-            {"id": "expired", "label": "Expired"},
-            {"id": "theft", "label": "Theft"},
-            {"id": "misplaced", "label": "Misplaced"},
-            {"id": "data_entry_error", "label": "Data Entry Error"},
-            {"id": "supplier_shortage", "label": "Supplier Shortage"},
-            {"id": "other", "label": "Other"},
-        ]
-    }
-
-
-
 # ERP Item routes
-@api_router.get("/erp/items/barcode/{barcode}")
-async def get_item_by_barcode(barcode: str, current_user: dict = Depends(get_current_user)):
-    # Try cache first
-    cached = await cache_service.get("items", barcode)
-    if cached:
-        return ERPItem(**cached)
-
-    # Check if SQL Server is configured
-    config = await db.erp_config.find_one({})
-
-    # Establish connection if not connected yet
-    if config and config.get("use_sql_server", False):
-        if not sql_connector.test_connection():
-            # Try to establish connection using config
-            try:
-                host = config.get("host") or os.getenv("SQL_SERVER_HOST")
-                port = config.get("port") or int(os.getenv("SQL_SERVER_PORT", 1433))
-                database = config.get("database") or os.getenv("SQL_SERVER_DATABASE")
-                user = config.get("user") or os.getenv("SQL_SERVER_USER")
-                password = config.get("password") or os.getenv("SQL_SERVER_PASSWORD")
-
-                if host and database:
-                    sql_connector.connect(host, port, database, user, password)
-            except Exception as e:
-                logger.warning(f"Failed to establish SQL Server connection: {str(e)}")
-
-    if config and config.get("use_sql_server", False) and sql_connector.test_connection():
-        # Fetch from SQL Server (Polosys ERP)
-        try:
-            # Normalize barcode for 6-digit manual barcodes
-            normalized_barcode = barcode.strip()
-            barcode_variations = [normalized_barcode]
-
-            # If barcode is numeric, try 6-digit format variations
-            if normalized_barcode.isdigit():
-                # Pad to 6 digits if less than 6
-                if len(normalized_barcode) < 6:
-                    padded = normalized_barcode.zfill(6)
-                    barcode_variations.append(padded)
-                    logger.info(
-                        f"Trying padded 6-digit barcode: {padded} (from {normalized_barcode})"
-                    )
-
-                # Try exact 6-digit format
-                if len(normalized_barcode) != 6:
-                    # If more than 6 digits, try trimming leading zeros
-                    trimmed = normalized_barcode.lstrip("0")
-                    if trimmed and len(trimmed) <= 6:
-                        padded_trimmed = trimmed.zfill(6)
-                        barcode_variations.append(padded_trimmed)
-                        logger.info(
-                            f"Trying trimmed 6-digit barcode: {padded_trimmed} (from {normalized_barcode})"
-                        )
-
-            # Try each barcode variation
-            item = None
-            tried_barcodes = []
-            for barcode_variant in barcode_variations:
-                tried_barcodes.append(barcode_variant)
-                item = sql_connector.get_item_by_barcode(barcode_variant)
-                if item:
-                    logger.info(
-                        f"Found item with barcode variant: {barcode_variant} (original: {barcode})"
-                    )
-                    # Keep original barcode in response
-                    item["barcode"] = normalized_barcode
-                    break
-
-            if not item:
-                error = get_error_message("ERP_ITEM_NOT_FOUND", {"barcode": barcode})
-                logger.warning(
-                    f"Item not found in ERP: barcode={barcode}, tried variations: {tried_barcodes}"
-                )
-                raise HTTPException(
-                    status_code=error["status_code"],
-                    detail={
-                        "message": error["message"],
-                        "detail": f"{error['detail']} Barcode: {barcode}. Tried variations: {', '.join(tried_barcodes)}",
-                        "code": error["code"],
-                        "category": error["category"],
-                        "barcode": barcode,
-                        "tried_variations": tried_barcodes,
-                    },
-                )
-
-            # Ensure all required fields exist with defaults
-            item_data = {
-                "item_code": item.get("item_code", ""),
-                "item_name": item.get("item_name", ""),
-                "barcode": item.get("barcode", barcode),
-                "stock_qty": float(item.get("stock_qty", 0.0)),
-                "mrp": float(item.get("mrp", 0.0)),
-                "category": item.get("category", "General"),
-                "subcategory": item.get("subcategory", ""),
-                "warehouse": item.get("warehouse", "Main"),
-                "uom_code": item.get("uom_code", ""),
-                "uom_name": item.get("uom_name", ""),
-                "floor": item.get("floor", ""),
-                "rack": item.get("rack", ""),
-            }
-
-            # Cache for 1 hour
-            await cache_service.set("items", barcode, item_data, ttl=3600)
-            logger.info(f"Item fetched from ERP: {item_data.get('item_code')} (barcode: {barcode})")
-
-            return ERPItem(**item_data)
-        except HTTPException:
-            raise
-        except Exception as e:
-            error = get_error_message("ERP_QUERY_FAILED", {"barcode": barcode, "error": str(e)})
-            logger.error(f"ERP query error for barcode {barcode}: {str(e)}", exc_info=True)
-            raise HTTPException(
-                status_code=error["status_code"],
-                detail={
-                    "message": error["message"],
-                    "detail": f"{error['detail']} Barcode: {barcode}. Error: {str(e)}",
-                    "code": error["code"],
-                    "category": error["category"],
-                    "barcode": barcode,
-                },
-            )
-    else:
-        # Fallback to MongoDB cache
-        item = await db.erp_items.find_one({"barcode": barcode})
-        if not item:
-            error = get_error_message("DB_ITEM_NOT_FOUND", {"barcode": barcode})
-            logger.warning(f"Item not found in MongoDB cache: barcode={barcode}")
-            raise HTTPException(
-                status_code=error["status_code"],
-                detail={
-                    "message": error["message"],
-                    "detail": f"{error['detail']} Barcode: {barcode}. Note: ERP system is not configured, using cached data.",
-                    "code": error["code"],
-                    "category": error["category"],
-                    "barcode": barcode,
-                    "source": "mongodb_cache",
-                },
-            )
-
-        # Cache for 1 hour
-        await cache_service.set("items", barcode, item, ttl=3600)
-        logger.debug(f"Item fetched from MongoDB cache: barcode={barcode}")
-
-        return ERPItem(**item)
-
-
-@api_router.post("/erp/items/{item_code}/refresh-stock")
-async def refresh_item_stock(
-    request: Request, item_code: str, current_user: dict = Depends(get_current_user)
-):
-    """
-    Refresh item stock from ERP and update MongoDB
-    Fetches latest stock quantity from SQL Server and updates MongoDB
-    """
-    # Check if SQL Server is configured
-    config = await db.erp_config.find_one({})
-
-    # Establish connection if not connected yet
-    if config and config.get("use_sql_server", False):
-        if not sql_connector.test_connection():
-            # Try to establish connection using config
-            try:
-                host = config.get("host") or os.getenv("SQL_SERVER_HOST")
-                port = config.get("port") or int(os.getenv("SQL_SERVER_PORT", 1433))
-                database = config.get("database") or os.getenv("SQL_SERVER_DATABASE")
-                user = config.get("user") or os.getenv("SQL_SERVER_USER")
-                password = config.get("password") or os.getenv("SQL_SERVER_PASSWORD")
-
-                if host and database:
-                    sql_connector.connect(host, port, database, user, password)
-            except Exception as e:
-                logger.warning(f"Failed to establish SQL Server connection: {str(e)}")
-
-    if config and config.get("use_sql_server", False) and sql_connector.test_connection():
-        # Fetch from SQL Server (Polosys ERP)
-        try:
-            # Try by item code first
-            item = sql_connector.get_item_by_code(item_code)
-
-            # If not found by code, try to get from MongoDB first to get barcode
-            if not item:
-                mongo_item = await db.erp_items.find_one({"item_code": item_code})
-                if mongo_item and mongo_item.get("barcode"):
-                    item = sql_connector.get_item_by_barcode(mongo_item.get("barcode"))
-
-            if not item:
-                error = get_error_message("ERP_ITEM_NOT_FOUND", {"item_code": item_code})
-                raise HTTPException(
-                    status_code=error["status_code"],
-                    detail={
-                        "message": error["message"],
-                        "detail": f"{error['detail']} Item Code: {item_code}",
-                        "code": error["code"],
-                        "category": error["category"],
-                    },
-                )
-
-            # Prepare updated item data
-            item_data = {
-                "item_code": item.get("item_code", item_code),
-                "item_name": item.get("item_name", ""),
-                "barcode": item.get("barcode", ""),
-                "stock_qty": float(item.get("stock_qty", 0.0)),
-                "mrp": float(item.get("mrp", 0.0)),
-                "category": item.get("category", "General"),
-                "subcategory": item.get("subcategory", ""),
-                "warehouse": item.get("warehouse", "Main"),
-                "uom_code": item.get("uom_code", ""),
-                "uom_name": item.get("uom_name", ""),
-                "floor": item.get("floor", ""),
-                "rack": item.get("rack", ""),
-                "synced_at": datetime.utcnow(),
-                "synced_from_erp": True,
-                "last_erp_update": datetime.utcnow(),
-            }
-
-            # Update MongoDB
-            await db.erp_items.update_one(
-                {"item_code": item_code},
-                {"$set": item_data, "$setOnInsert": {"created_at": datetime.utcnow()}},
-                upsert=True,
-            )
-
-            # Clear cache
-            await cache_service.delete("items", item_data.get("barcode", ""))
-
-            logger.info(f"Stock refreshed from ERP: {item_code} - Stock: {item_data['stock_qty']}")
-
-            return {
-                "success": True,
-                "item": ERPItem(**item_data),
-                "message": f"Stock updated: {item_data['stock_qty']}",
-            }
-
-        except HTTPException:
-            raise
-        except Exception as e:
-            error = get_error_message("ERP_CONNECTION_ERROR", {"error": str(e)})
-            logger.error(f"Failed to refresh stock from ERP: {str(e)}")
-            raise HTTPException(
-                status_code=error["status_code"],
-                detail={
-                    "message": error["message"],
-                    "detail": f"Failed to refresh stock: {str(e)}",
-                    "code": error["code"],
-                    "category": error["category"],
-                },
-            )
-    else:
-        # Fallback: Get from MongoDB
-        item = await db.erp_items.find_one({"item_code": item_code})
-        if not item:
-            raise HTTPException(status_code=404, detail="Item not found")
-
-        return {
-            "success": True,
-            "item": ERPItem(**item),
-            "message": "Stock from MongoDB (ERP connection not available)",
-        }
-
-
-@api_router.get("/erp/items")
-async def get_all_items(
-    search: Optional[str] = None,
-    current_user: dict = Depends(get_current_user),
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
-):
-    """
-    Get all items or search items
-    - If search parameter is provided, search SQL Server or MongoDB
-    - Otherwise, return all items from MongoDB
-    """
-    # If search query provided, search items
-    if search and search.strip():
-        search_term = search.strip()
-
-        # Check if SQL Server is configured
-        config = await db.erp_config.find_one({})
-
-        # Establish connection if not connected yet
-        if config and config.get("use_sql_server", False):
-            if not sql_connector.test_connection():
-                # Try to establish connection using config
-                try:
-                    host = config.get("host") or os.getenv("SQL_SERVER_HOST")
-                    port = config.get("port") or int(os.getenv("SQL_SERVER_PORT", 1433))
-                    database = config.get("database") or os.getenv("SQL_SERVER_DATABASE")
-                    user = config.get("user") or os.getenv("SQL_SERVER_USER")
-                    password = config.get("password") or os.getenv("SQL_SERVER_PASSWORD")
-
-                    if host and database:
-                        sql_connector.connect(host, port, database, user, password)
-                except Exception as e:
-                    logger.warning(f"Failed to establish SQL Server connection: {str(e)}")
-
-        if config and config.get("use_sql_server", False) and sql_connector.test_connection():
-            # Search in SQL Server (Polosys ERP)
-            try:
-                items = sql_connector.search_items(search_term)
-
-                # Convert to ERPItem format and apply pagination
-                result_items = []
-                for item in items:
-                    item_data = {
-                        "item_code": item.get("item_code", ""),
-                        "item_name": item.get("item_name", ""),
-                        "barcode": item.get("barcode", ""),
-                        "stock_qty": float(item.get("stock_qty", 0.0)),
-                        "mrp": float(item.get("mrp", 0.0)),
-                        "category": item.get("category", "General"),
-                        "warehouse": item.get("warehouse", "Main"),
-                        "uom_code": item.get("uom_code", ""),
-                        "uom_name": item.get("uom_name", ""),
-                    }
-                    result_items.append(ERPItem(**item_data))
-
-                # Apply client-side pagination for SQL results
-                total = len(result_items)
-                skip = (page - 1) * page_size
-                paginated_items = result_items[skip : skip + page_size]
-
-                return {
-                    "items": paginated_items,
-                    "pagination": {
-                        "page": page,
-                        "page_size": page_size,
-                        "total": total,
-                        "total_pages": (total + page_size - 1) // page_size,
-                        "has_next": skip + page_size < total,
-                        "has_prev": page > 1,
-                    },
-                }
-            except Exception as e:
-                logger.error(f"ERP search error: {str(e)}")
-                # Fallback to MongoDB search
-                pass
-
-        # Fallback: Search in MongoDB
-        items_cursor = db.erp_items.find(
-            {
-                "$or": [
-                    {"item_name": {"$regex": search_term, "$options": "i"}},
-                    {"item_code": {"$regex": search_term, "$options": "i"}},
-                    {"barcode": {"$regex": search_term, "$options": "i"}},
-                ]
-            }
-        )
-        total = await db.erp_items.count_documents(
-            {
-                "$or": [
-                    {"item_name": {"$regex": search_term, "$options": "i"}},
-                    {"item_code": {"$regex": search_term, "$options": "i"}},
-                    {"barcode": {"$regex": search_term, "$options": "i"}},
-                ]
-            }
-        )
-        skip = (page - 1) * page_size
-        items = await items_cursor.skip(skip).limit(page_size).to_list(page_size)
-
-        # Ensure all items have required fields with defaults
-        normalized_items = []
-        for item in items:
-            if "category" not in item:
-                item["category"] = "General"
-            if "warehouse" not in item:
-                item["warehouse"] = "Main"
-            normalized_items.append(item)
-
-        return {
-            "items": [ERPItem(**item) for item in normalized_items],
-            "pagination": {
-                "page": page,
-                "page_size": page_size,
-                "total": total,
-                "total_pages": (total + page_size - 1) // page_size,
-                "has_next": skip + page_size < total,
-                "has_prev": page > 1,
-            },
-        }
-
-    # No search: return all items from MongoDB with pagination
-    total = await db.erp_items.count_documents({})
-    skip = (page - 1) * page_size
-    items_cursor = db.erp_items.find().sort("item_name", 1).skip(skip).limit(page_size)
-    items = await items_cursor.to_list(page_size)
-
-    return {
-        "items": [ERPItem(**item) for item in items],
-        "pagination": {
-            "page": page,
-            "page_size": page_size,
-            "total": total,
-            "total_pages": (total + page_size - 1) // page_size,
-            "has_next": skip + page_size < total,
-            "has_prev": page > 1,
-        },
-    }
-
-
-@api_router.get("/items/search")
-async def search_items_compatibility(
-    query: Optional[str] = Query(None, description="Search term (legacy param 'query')"),
-    search: Optional[str] = Query(None, description="Alternate search param"),
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Compatibility endpoint for legacy clients that call `/api/items/search?query=...`.
-    Reuses the new `/api/erp/items?search=...` implementation.
-    """
-    search_term = (query or search or "").strip()
-    if not search_term:
-        raise HTTPException(
-            status_code=400,
-            detail="Missing search term. Provide ?query= or ?search= parameter.",
-        )
-
-    return await get_all_items(
-        search=search_term,
-        current_user=current_user,
-        page=page,
-        page_size=page_size,
-    )
 
 
 # Helper function to detect high-risk corrections
@@ -2548,7 +1880,6 @@ def detect_risk_flags(erp_item: dict, line_data: CountLineCreate, variance: floa
 
     # Get values
     erp_qty = erp_item.get("stock_qty", 0)
-    counted_qty = line_data.counted_qty
     erp_mrp = erp_item.get("mrp", 0)
     counted_mrp = line_data.mrp_counted or erp_mrp
 
@@ -2715,7 +2046,7 @@ async def create_count_line(
         "verified_by": None,
     }
 
-    result = await db.count_lines.insert_one(count_line)
+    await db.count_lines.insert_one(count_line)
 
     # Update session stats atomically using aggregation
     try:
@@ -2729,7 +2060,7 @@ async def create_count_line(
                 }
             },
         ]
-        stats = await db.count_lines.aggregate(pipeline).to_list(1)
+        stats = await db.count_lines.aggregate(pipeline).to_list(1)  # type: ignore
         if stats:
             await db.sessions.update_one(
                 {"id": line_data.session_id},
@@ -2892,7 +2223,7 @@ async def approve_count_line(
     """Approve a count line variance."""
     if current_user["role"] not in ["supervisor", "admin"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
+
     try:
         result = await db.count_lines.update_one(
             {"_id": ObjectId(line_id)},
@@ -2904,14 +2235,14 @@ async def approve_count_line(
                     "approved_at": datetime.utcnow(),
                     "verified": True,
                     "verified_by": current_user["username"],
-                    "verified_at": datetime.utcnow()
+                    "verified_at": datetime.utcnow(),
                 }
-            }
+            },
         )
-        
+
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Count line not found")
-            
+
         return {"success": True, "message": "Count line approved"}
     except Exception as e:
         logger.error(f"Error approving count line {line_id}: {str(e)}")
@@ -2926,7 +2257,7 @@ async def reject_count_line(
     """Reject a count line (request recount)."""
     if current_user["role"] not in ["supervisor", "admin"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-        
+
     try:
         result = await db.count_lines.update_one(
             {"_id": ObjectId(line_id)},
@@ -2936,14 +2267,14 @@ async def reject_count_line(
                     "approval_status": "rejected",
                     "rejected_by": current_user["username"],
                     "rejected_at": datetime.utcnow(),
-                    "verified": False
+                    "verified": False,
                 }
-            }
+            },
         )
-        
+
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Count line not found")
-            
+
         return {"success": True, "message": "Count line rejected"}
     except Exception as e:
         logger.error(f"Error rejecting count line {line_id}: {str(e)}")
@@ -2959,20 +2290,14 @@ async def check_item_counted(
     """Check if an item has already been counted in the session"""
     try:
         # Find all count lines for this item in this session
-        cursor = db.count_lines.find({
-            "session_id": session_id,
-            "item_code": item_code
-        })
+        cursor = db.count_lines.find({"session_id": session_id, "item_code": item_code})
         count_lines = await cursor.to_list(length=None)
-        
+
         # Convert ObjectId to string
         for line in count_lines:
             line["_id"] = str(line["_id"])
-            
-        return {
-            "already_counted": len(count_lines) > 0,
-            "count_lines": count_lines
-        }
+
+        return {"already_counted": len(count_lines) > 0, "count_lines": count_lines}
     except Exception as e:
         logger.error(f"Error checking item count: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2994,18 +2319,42 @@ async def get_count_lines_route(
         verified=verified,
     )
 
+
 # Register api_router AFTER all routes have been defined
-app.include_router(api_router, prefix="/api")  # Main API endpoints with auth, sessions, items, count-lines
+app.include_router(
+    api_router, prefix="/api"
+)  # Main API endpoints with auth, sessions, items, count-lines
 
 
 # Run the server if executed directly
 if __name__ == "__main__":
     import uvicorn
+    import json
+    from datetime import datetime
+    from pathlib import Path
+
+    # Get port from environment or settings
+    port = int(getattr(settings, "PORT", os.getenv("PORT", 8001)))
+
+    # Save port to file for other services to discover
+    try:
+        port_data = {"port": port, "pid": os.getpid(), "timestamp": datetime.utcnow().isoformat()}
+
+        # Save to backend_port.json in project root
+        root_dir = Path(__file__).parent.parent
+        with open(root_dir / "backend_port.json", "w") as f:
+            json.dump(port_data, f)
+
+        logger.info(f"Saved backend port info to {root_dir / 'backend_port.json'}")
+    except Exception as e:
+        logger.warning(f"Failed to save backend port info: {e}")
+
+    logger.info(f"Starting server on port {port}...")
     uvicorn.run(
-        "server:app",
+        "backend.server:app",
         host="0.0.0.0",
-        port=8001,
+        port=port,
         reload=True,
         log_level="info",
-        access_log=True
+        access_log=True,
     )

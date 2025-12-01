@@ -35,6 +35,38 @@ export const themes: Record<string, AppTheme> = {
     radius: { sm: 4, md: 8, lg: 12 },
     typography: { baseSize: 14, scale: 1.125 },
   },
+  dark: {
+    colors: {
+      background: '#121212',
+      surface: '#1E1E1E',
+      text: '#E0E0E0',
+      muted: '#A0A0A0',
+      accent: '#BB86FC',
+      success: '#03DAC6',
+      danger: '#CF6679',
+      warning: '#FFB74D',
+      border: '#333333',
+    },
+    spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 },
+    radius: { sm: 4, md: 8, lg: 12 },
+    typography: { baseSize: 14, scale: 1.125 },
+  },
+  premium: {
+    colors: {
+      background: '#0F172A',
+      surface: '#1E293B',
+      text: '#F8FAFC',
+      muted: '#94A3B8',
+      accent: '#38BDF8',
+      success: '#4ADE80',
+      danger: '#F87171',
+      warning: '#FBBF24',
+      border: '#334155',
+    },
+    spacing: { xs: 6, sm: 10, md: 14, lg: 18, xl: 26 },
+    radius: { sm: 6, md: 12, lg: 16 },
+    typography: { baseSize: 15, scale: 1.2 },
+  },
   highContrast: {
     colors: {
       background: '#000000',

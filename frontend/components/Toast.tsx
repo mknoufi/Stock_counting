@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { Text, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -18,10 +18,10 @@ interface ToastProps {
   duration?: number;
 }
 
-export const Toast: React.FC<ToastProps> = ({ 
-  message, 
-  type = 'info', 
-  visible, 
+export const Toast: React.FC<ToastProps> = ({
+  message,
+  type = 'info',
+  visible,
   onHide,
   duration = 3000,
 }) => {
@@ -69,8 +69,9 @@ export const Toast: React.FC<ToastProps> = ({
       opacity.value = 0;
       translateY.value = -100;
       scale.value = 0.8;
+      return undefined;
     }
-  }, [visible, duration]);
+  }, [visible, duration, onHide, opacity, scale, translateY]);
 
   const animatedStyle = useAnimatedStyle(() => {
     return {

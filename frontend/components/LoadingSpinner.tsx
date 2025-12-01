@@ -1,11 +1,9 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { Text, StyleSheet, ActivityIndicator } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withRepeat,
-  withSequence,
   Easing,
 } from 'react-native-reanimated';
 import { useTheme } from '../hooks/useTheme';
@@ -46,7 +44,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
       opacity.value = 1;
       scale.value = 1;
     }
-  }, []);
+  }, [opacity, scale]);
 
   const animatedStyle = useAnimatedStyle(() => {
     if (!flags.enableAnimations) {

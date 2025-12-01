@@ -40,7 +40,7 @@ export default function SqlConfigScreen() {
       return;
     }
     loadConfig();
-  }, []);
+  }, [hasRole, router]);
 
   const loadConfig = async () => {
     try {

@@ -20,6 +20,7 @@ interface ItemSearchProps {
   onItemNameSubmit: () => void;
   onSearch: (query: string) => void;
   onVoiceSearch?: () => void;
+  onScan?: () => void;
   onSelectItem: (item: SearchResult) => void;
   onActivityReset?: () => void;
 }
@@ -37,6 +38,7 @@ export const ItemSearch: React.FC<ItemSearchProps> = ({
   onItemNameSubmit,
   onSearch,
   onVoiceSearch,
+  onScan,
   onSelectItem,
   onActivityReset,
 }) => {
@@ -55,50 +57,57 @@ export const ItemSearch: React.FC<ItemSearchProps> = ({
 
   return (
     <View style={styles.manualEntryContainer}>
-      <Text style={styles.manualEntryTitle}>Manual Entry</Text>
+      <Text style={styles.manualEntryTitle}>Scan or Search Item</Text>
 
       {/* Barcode Input */}
       <View style={styles.inputGroup}>
         <View style={styles.inputLabelContainer}>
           <Ionicons name="barcode-outline" size={20} color="#3B82F6" />
-          <Text style={styles.inputLabel}>Enter Barcode</Text>
+          <Text style={styles.inputLabel}>Scan Barcode</Text>
         </View>
-        <TextInput
-          style={styles.manualInput}
-          placeholder="Enter 6-digit barcode (e.g., 123456)"
-          placeholderTextColor="#94A3B8"
-          value={manualBarcode}
-          onChangeText={handleBarcodeChange}
-          keyboardType="numeric"
-          maxLength={20}
-          onSubmitEditing={onBarcodeSubmit}
-        />
-        <TouchableOpacity
-          style={[styles.searchButton, !manualBarcode.trim() && styles.searchButtonDisabled]}
-          onPress={() => {
-            onActivityReset?.();
-            if (manualBarcode.trim()) {
+        <View style={styles.combinedInputContainer}>
+          <TextInput
+            style={styles.manualInput}
+            placeholder="Enter barcode"
+            placeholderTextColor="#94A3B8"
+            value={manualBarcode}
+            onChangeText={(text) => {
+              onActivityReset?.();
+              onBarcodeChange(text);
+              if (text.length === 6) {
+                onBarcodeSubmit();
+              }
+            }}
+            keyboardType="numeric"
+            returnKeyType="done"
+            onSubmitEditing={onBarcodeSubmit}
+          />
+          {onScan && (
+            <TouchableOpacity
+              style={styles.scanButton}
+              onPress={onScan}
+            >
+              <Ionicons name="scan-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={[styles.searchButton, !manualBarcode && styles.searchButtonDisabled]}
+            onPress={() => {
+              onActivityReset?.();
               onBarcodeSubmit();
-            }
-          }}
-          disabled={!manualBarcode.trim()}
-        >
-          <Ionicons name="search" size={20} color="#fff" />
-          <Text style={styles.searchButtonText}>Search</Text>
-        </TouchableOpacity>
+            }}
+            disabled={!manualBarcode}
+          >
+            <Ionicons name="arrow-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <View style={styles.inputDivider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.orText}>OR</Text>
-        <View style={styles.dividerLine} />
-      </View>
-
-      {/* Item Name Input */}
+      {/* Item Name Search Input */}
       <View style={styles.inputGroup}>
         <View style={styles.inputLabelContainer}>
-          <Ionicons name="text-outline" size={20} color="#3B82F6" />
-          <Text style={styles.inputLabel}>Enter Item Name</Text>
+          <Ionicons name="search-outline" size={20} color="#3B82F6" />
+          <Text style={styles.inputLabel}>Search Item Name</Text>
           {onVoiceSearch && (
             <TouchableOpacity style={styles.voiceButton} onPress={onVoiceSearch}>
               <Ionicons
@@ -109,33 +118,33 @@ export const ItemSearch: React.FC<ItemSearchProps> = ({
             </TouchableOpacity>
           )}
         </View>
-        <TextInput
-          style={styles.manualInput}
-          placeholder="Enter item name (min 3 characters)"
-          placeholderTextColor="#94A3B8"
-          value={manualItemName}
-          onChangeText={handleItemNameChange}
-          autoCapitalize="words"
-          onSubmitEditing={() => {
-            if (manualItemName.trim().length >= 3) {
-              onItemNameSubmit();
-            }
-          }}
-        />
-        {manualItemName.trim().length >= 3 && (
-          <TouchableOpacity
-            style={styles.searchButton}
-            onPress={() => {
+        <View style={styles.combinedInputContainer}>
+          <TextInput
+            style={styles.manualInput}
+            placeholder="Enter item name"
+            placeholderTextColor="#94A3B8"
+            value={manualItemName}
+            onChangeText={(text) => {
               onActivityReset?.();
-              if (manualItemName.trim().length >= 3) {
-                onSearch(manualItemName.trim());
+              onItemNameChange(text);
+              if (text.trim().length >= 3) {
+                onSearch(text);
               }
             }}
+            returnKeyType="search"
+            onSubmitEditing={onItemNameSubmit}
+          />
+          <TouchableOpacity
+            style={[styles.searchButton, !manualItemName && styles.searchButtonDisabled]}
+            onPress={() => {
+              onActivityReset?.();
+              onItemNameSubmit();
+            }}
+            disabled={!manualItemName}
           >
             <Ionicons name="search" size={20} color="#fff" />
-            <Text style={styles.searchButtonText}>Search</Text>
           </TouchableOpacity>
-        )}
+        </View>
       </View>
 
       {/* Search Results */}
@@ -206,30 +215,41 @@ const styles = StyleSheet.create({
   voiceButton: {
     backgroundColor: '#3B82F6',
     borderRadius: 12,
-    padding: 12,
+    padding: 8,
     alignItems: 'center',
   },
-  manualInput: {
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    padding: 16,
-    color: '#fff',
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 8,
-  },
-  searchButton: {
+  combinedInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#1E293B',
     borderRadius: 12,
-    padding: 14,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  manualInput: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 16,
+    paddingVertical: 12,
+    paddingRight: 8,
+  },
+  scanButton: {
+    padding: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: 8,
+    marginLeft: 4,
+  },
+  searchButton: {
+    padding: 8,
+    backgroundColor: '#3B82F6',
+    borderRadius: 8,
+    marginLeft: 8,
   },
   searchButtonDisabled: {
     opacity: 0.5,
+    backgroundColor: '#334155',
   },
   searchButtonText: {
     color: '#fff',
@@ -313,4 +333,3 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
-

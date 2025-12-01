@@ -3,18 +3,19 @@ Permissions Management API
 Endpoints for managing user permissions
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
-from pydantic import BaseModel
 from typing import List
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+
 from backend.auth.permissions import (
+    ROLE_PERMISSIONS,
     Permission,
-    get_user_permissions,
     add_permissions_to_user,
-    remove_permissions_from_user,
     disable_permissions_for_user,
     enable_permissions_for_user,
-    ROLE_PERMISSIONS,
+    get_user_permissions,
+    remove_permissions_from_user,
 )
 
 permissions_router = APIRouter(prefix="/permissions", tags=["permissions"])

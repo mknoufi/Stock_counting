@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { Modal, View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { Modal, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate, runOnJS } from 'react-native-reanimated';
 import { flags } from '../../constants/flags';
 
@@ -31,7 +32,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, heig
         }
       });
     }
-  }, [visible]);
+  }, [visible, progress]); // Changed dependency from [visible] to [visible, progress]
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: interpolate(progress.value, [0, 1], [0, 0.5]),
@@ -57,7 +58,9 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, heig
       <Animated.View style={[styles.backdrop, backdropStyle]}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
       </Animated.View>
-      <Animated.View style={[styles.sheet, { height }, sheetStyle]}> {children} </Animated.View>
+      <Animated.View style={[styles.sheet, { height }, sheetStyle]}>
+        {children}
+      </Animated.View>
     </Modal>
   );
 };

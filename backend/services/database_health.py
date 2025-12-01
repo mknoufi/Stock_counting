@@ -6,8 +6,9 @@ Monitors database connections and provides health checks
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, TYPE_CHECKING
-from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorClient
+from typing import TYPE_CHECKING, Any, Dict, Optional
+
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo.errors import InvalidOperation
 
 if TYPE_CHECKING:
@@ -130,7 +131,7 @@ class DatabaseHealthService:
         """Check SQL Server connection health"""
         start_time = datetime.utcnow()
         try:
-            if self.sql_connector is None or getattr(self.sql_connector, 'config', None) is None:
+            if self.sql_connector is None or getattr(self.sql_connector, "config", None) is None:
                 logger.debug("SQL Server not configured; skipping health check")
                 self._health_status["sql_server"] = {
                     "status": "skipped",
@@ -221,11 +222,15 @@ class DatabaseHealthService:
         self._task = asyncio.create_task(self._health_check_loop())
         logger.info(f"Database health monitoring started (interval: {self.check_interval}s)")
 
-    def stop(self):
+    async def stop(self):
         """Stop background health monitoring"""
         self._running = False
         if self._task:
             self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
         if self._dedicated_client:
             try:
                 self._dedicated_client.close()

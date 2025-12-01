@@ -4,13 +4,14 @@ Zero-error, type-safe, high-performance database operations
 """
 
 import logging
-from typing import Dict, Any, List, Optional, TypeVar, Generic
-from datetime import datetime
-from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
 import time
+from datetime import datetime
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 
-from backend.utils.result_types import Result
+from motor.motor_asyncio import AsyncIOMotorCollection, AsyncIOMotorDatabase
+
 from backend.utils.async_utils import AsyncExecutor, safe_async_execute
+from backend.utils.result_types import Result
 
 logger = logging.getLogger(__name__)
 

@@ -1,12 +1,13 @@
 """Check database connections - MongoDB and SQL Server"""
 
 import asyncio
+import io
 import os
 import sys
-import io
-from motor.motor_asyncio import AsyncIOMotorClient
-from dotenv import load_dotenv
 from pathlib import Path
+
+from dotenv import load_dotenv
+from motor.motor_asyncio import AsyncIOMotorClient
 
 # Set UTF-8 encoding for Windows
 if sys.platform == "win32":

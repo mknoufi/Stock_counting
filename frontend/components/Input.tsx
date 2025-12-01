@@ -20,6 +20,7 @@ interface InputProps extends TextInputProps {
   error?: string;
   leftIcon?: keyof typeof Ionicons.glyphMap;
   rightIcon?: keyof typeof Ionicons.glyphMap;
+  rightIconColor?: string;
   onRightIconPress?: () => void;
   containerStyle?: object;
 }
@@ -29,6 +30,7 @@ export const Input = React.forwardRef<TextInput, InputProps>(({
   error,
   leftIcon,
   rightIcon,
+  rightIconColor,
   onRightIconPress,
   containerStyle,
   ...textInputProps
@@ -87,7 +89,7 @@ export const Input = React.forwardRef<TextInput, InputProps>(({
             <Ionicons
               name={rightIcon}
               size={20}
-              color={theme.colors.placeholder}
+              color={rightIconColor || theme.colors.placeholder}
             />
           </TouchableOpacity>
         )}

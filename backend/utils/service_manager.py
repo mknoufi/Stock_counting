@@ -3,11 +3,11 @@ Service Manager - Ensures only one instance of backend/frontend runs
 Handles port conflicts dynamically and kills existing instances
 """
 
+import logging
 import os
+import platform
 import socket
 import subprocess
-import platform
-import logging
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -98,14 +98,14 @@ class ServiceManager:
                             timeout=5,
                         )
                         killed += 1
-                    except:
+                    except Exception:
                         pass
             else:
                 for pattern in name_patterns:
                     try:
                         subprocess.run(["pkill", "-f", pattern], capture_output=True, timeout=5)
                         killed += 1
-                    except:
+                    except Exception:
                         pass
         except Exception as e:
             logger.warning(f"Error killing processes: {e}")

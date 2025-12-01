@@ -6,8 +6,8 @@ Usage:
   python scripts/generate_secrets.py --write  -> writes to .env (will overwrite existing keys but not other lines)
 """
 
-import secrets
 import argparse
+import secrets
 from pathlib import Path
 
 DEFAULT_BYTES = 48

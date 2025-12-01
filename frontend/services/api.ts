@@ -274,29 +274,33 @@ export const getItemByBarcode = async (barcode: string, retryCount: number = 3) 
     console.log('🌐 Online mode - calling API');
 
     // Direct API call with retry
-    const response = await retryWithBackoff(() => api.get(`/erp/items/barcode/${encodeURIComponent(trimmedBarcode)}`), {
+    // Use enhanced v2 endpoint for better performance and metadata
+    const response = await retryWithBackoff(() => api.get(`/v2/erp/items/barcode/${encodeURIComponent(trimmedBarcode)}/enhanced`), {
       retries: retryCount,
       backoffMs: 1000,
     });
 
-    console.log('✅ Found via API:', response.data.item_code);
+    // Handle v2 response format { item: ..., metadata: ... }
+    const itemData = response.data.item || response.data;
+
+    console.log('✅ Found via API:', itemData.item_code);
 
     // Cache the item for future offline use
     try {
       await cacheItem({
-        item_code: response.data.item_code,
-        barcode: response.data.barcode,
-        item_name: response.data.item_name,
-        description: response.data.description,
-        uom: response.data.uom,
-        current_stock: response.data.current_stock,
+        item_code: itemData.item_code,
+        barcode: itemData.barcode,
+        item_name: itemData.item_name,
+        description: itemData.description,
+        uom: itemData.uom,
+        current_stock: itemData.current_stock || itemData.stock_qty, // Handle field name difference
       });
     } catch (cacheError) {
       console.warn('Failed to cache item:', cacheError);
       // Don't fail the whole operation for cache errors
     }
 
-    return response.data;
+    return itemData;
 
   } catch (apiError: any) {
     console.error('❌ API call failed:', apiError.message);
@@ -337,12 +341,11 @@ export const searchItems = async (query: string) => {
       return await searchItemsInCache(query);
     }
 
-    const response = await api.get(`/erp/items?search=${encodeURIComponent(query)}`);
+    // Use enhanced v2 search endpoint
+    const response = await api.get(`/v2/erp/items/search/advanced?query=${encodeURIComponent(query)}`);
 
-    // Handle paginated response format
-    const items = Array.isArray(response.data)
-      ? response.data
-      : (response.data.items || []);
+    // Handle v2 response format
+    const items = response.data.items || [];
 
     // Cache the items
     for (const item of items) {
@@ -352,7 +355,7 @@ export const searchItems = async (query: string) => {
         item_name: item.item_name,
         description: item.description,
         uom: item.uom,
-        current_stock: item.current_stock,
+        current_stock: item.current_stock || item.stock_qty,
       });
     }
 
@@ -1645,4 +1648,26 @@ export const settingsApi = {
   updateSystemSettings,
 };
 
-export default api;
+// Advanced Analytics API
+export const getVarianceTrend = async (days: number = 30) => {
+  try {
+    const response = await api.get(`/variance/trend?days=${days}`);
+    return response.data;
+  } catch (error: any) {
+    console.error('Get variance trend error:', error);
+    throw error;
+  }
+};
+
+export const getStaffPerformance = async (days: number = 30) => {
+  try {
+    const response = await api.get(`/metrics/staff-performance?days=${days}`);
+    return response.data;
+  } catch (error: any) {
+    console.error('Get staff performance error:', error);
+    throw error;
+  }
+};
+
+
+  export default api;

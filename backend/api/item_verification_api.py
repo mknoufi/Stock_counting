@@ -2,17 +2,18 @@
 Item Verification API - Verification, filtering, CSV export, and variance tracking
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from typing import Optional, Dict, Any, List
-import logging
-from datetime import datetime, timedelta
+import asyncio
 import csv
 import io
-import asyncio
+import logging
 from copy import deepcopy
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import BaseModel
 
 from backend.auth.dependencies import get_current_user_async as get_current_user
 
@@ -117,6 +118,7 @@ class VerificationRequest(BaseModel):
     session_id: Optional[str] = None
     count_line_id: Optional[str] = None
 
+
 class ItemUpdateRequest(BaseModel):
     mrp: Optional[float] = None
     sales_price: Optional[float] = None
@@ -159,15 +161,17 @@ async def update_item_master(
             update_doc["$set"]["uom"] = request.uom
 
         await db.erp_items.update_one({"item_code": item_code}, update_doc)
-        
+
         # Log the change
-        await db.audit_logs.insert_one({
-            "action": "MASTER_UPDATE",
-            "item_code": item_code,
-            "changes": request.dict(exclude_none=True),
-            "user": current_user["username"],
-            "timestamp": datetime.utcnow()
-        })
+        await db.audit_logs.insert_one(
+            {
+                "action": "MASTER_UPDATE",
+                "item_code": item_code,
+                "changes": request.dict(exclude_none=True),
+                "user": current_user["username"],
+                "timestamp": datetime.utcnow(),
+            }
+        )
 
         return {"success": True, "message": "Item details updated successfully"}
 
@@ -212,7 +216,7 @@ async def verify_item(
         if request.verified_qty is not None:
             update_doc["$set"]["verified_qty"] = request.verified_qty
             update_doc["$set"]["variance"] = variance
-        
+
         # New fields
         if request.damaged_qty is not None:
             update_doc["$set"]["damaged_qty"] = request.damaged_qty
@@ -235,9 +239,9 @@ async def verify_item(
         await db.erp_items.update_one({"item_code": item_code}, update_doc)
 
         # Create variance record if there's a variance OR if we are just recording a verification
-        # We should probably record every verification event now, not just variances, 
+        # We should probably record every verification event now, not just variances,
         # to track the "Session" progress.
-        
+
         verification_log = {
             "item_code": item_code,
             "item_name": item.get("item_name", ""),
@@ -256,9 +260,9 @@ async def verify_item(
             "session_id": request.session_id,
             "count_line_id": request.count_line_id,
             "item_condition": request.item_condition,
-            "serial_number": request.serial_number
+            "serial_number": request.serial_number,
         }
-        
+
         # Insert into verification_logs (new collection for full history)
         await db.verification_logs.insert_one(verification_log)
 
@@ -316,9 +320,7 @@ async def get_filtered_items(
         verified_filter = deepcopy(filter_query)
         verified_filter["verified"] = True
 
-        items_task = (
-            db.erp_items.find(filter_query).skip(skip).limit(limit).to_list(length=limit)
-        )
+        items_task = db.erp_items.find(filter_query).skip(skip).limit(limit).to_list(length=limit)
         total_count_task = db.erp_items.count_documents(filter_query)
         verified_count_task = db.erp_items.count_documents(verified_filter)
 
@@ -475,10 +477,7 @@ async def get_variances(
 
         # Get variances
         cursor = (
-            db.item_variances.find(filter_query)
-            .sort("verified_at", -1)
-            .skip(skip)
-            .limit(limit)
+            db.item_variances.find(filter_query).sort("verified_at", -1).skip(skip).limit(limit)
         )
         variances = await cursor.to_list(length=limit)
 
@@ -536,9 +535,11 @@ async def get_live_users(current_user: dict = Depends(get_current_user)):
         result = [
             {
                 "username": user["_id"],
-                "last_activity": user["last_activity"].isoformat()
-                if isinstance(user["last_activity"], datetime)
-                else user["last_activity"],
+                "last_activity": (
+                    user["last_activity"].isoformat()
+                    if isinstance(user["last_activity"], datetime)
+                    else user["last_activity"]
+                ),
                 "items_verified": user["items_verified"],
             }
             for user in users
@@ -582,9 +583,7 @@ async def get_live_verifications(
                     "item_name": item.get("item_name", ""),
                     "verified_by": item.get("verified_by", ""),
                     "verified_at": (
-                        item.get("verified_at").isoformat()
-                        if item.get("verified_at")
-                        else None
+                        item.get("verified_at").isoformat() if item.get("verified_at") else None
                     ),
                     "floor": item.get("floor", ""),
                     "rack": item.get("rack", ""),
@@ -597,7 +596,4 @@ async def get_live_verifications(
 
     except Exception as e:
         logger.error(f"Error getting live verifications: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get live verifications: {str(e)}"
-        )
-
+        raise HTTPException(status_code=500, detail=f"Failed to get live verifications: {str(e)}")

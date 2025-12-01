@@ -3,9 +3,10 @@ Standardized API Response Models
 Provides consistent response formats across all API endpoints
 """
 
-from typing import Optional, Generic, TypeVar, List, Dict, Any
-from pydantic import BaseModel, Field
 from datetime import datetime
+from typing import Any, Dict, Generic, List, Optional, TypeVar
+
+from pydantic import BaseModel, Field
 
 T = TypeVar("T")
 
@@ -15,6 +16,7 @@ class ApiResponse(BaseModel, Generic[T]):
     Standard API response wrapper
     All API endpoints should use this format for consistency
     """
+
     success: bool = Field(..., description="Whether the request was successful")
     data: Optional[T] = Field(None, description="Response data")
     error: Optional[Dict[str, Any]] = Field(None, description="Error details if success is false")
@@ -23,7 +25,9 @@ class ApiResponse(BaseModel, Generic[T]):
     request_id: Optional[str] = Field(None, description="Request ID for tracking")
 
     @classmethod
-    def success_response(cls, data: T, message: Optional[str] = None, request_id: Optional[str] = None):
+    def success_response(
+        cls, data: T, message: Optional[str] = None, request_id: Optional[str] = None
+    ):
         """Create a successful response"""
         return cls(
             success=True,
@@ -57,6 +61,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
     Paginated API response
     Use for endpoints that return lists with pagination
     """
+
     items: List[T] = Field(..., description="List of items")
     total: int = Field(..., description="Total number of items")
     page: int = Field(..., ge=1, description="Current page number")
@@ -88,14 +93,20 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 class HealthCheckResponse(BaseModel):
     """Health check response"""
+
     status: str = Field(..., description="Overall health status: healthy, degraded, unhealthy")
-    services: Dict[str, Dict[str, Any]] = Field(..., description="Individual service health statuses")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Health check timestamp")
+    services: Dict[str, Dict[str, Any]] = Field(
+        ..., description="Individual service health statuses"
+    )
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow, description="Health check timestamp"
+    )
     version: Optional[str] = Field(None, description="Application version")
 
 
 class ConnectionPoolStatusResponse(BaseModel):
     """Connection pool status response"""
+
     status: str = Field(..., description="Pool status: healthy, degraded, unhealthy")
     pool_size: int = Field(..., description="Configured pool size")
     created: int = Field(..., description="Number of connections created")
@@ -104,4 +115,3 @@ class ConnectionPoolStatusResponse(BaseModel):
     utilization: float = Field(..., description="Pool utilization percentage")
     metrics: Dict[str, Any] = Field(..., description="Detailed metrics")
     health_check: Optional[Dict[str, Any]] = Field(None, description="Last health check results")
-

@@ -8,8 +8,9 @@ import asyncio
 import json
 import sys
 from pathlib import Path
-from motor.motor_asyncio import AsyncIOMotorClient
+
 from bson import json_util
+from motor.motor_asyncio import AsyncIOMotorClient
 
 # Database name - check config
 DB_NAME = "stock_verification"  # Default from config.py

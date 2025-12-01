@@ -2,13 +2,14 @@
 Sync Status API - Provides endpoints for sync status and control
 """
 
-from fastapi import APIRouter, HTTPException, status
-from typing import Dict, Any
 import logging
+from typing import Any, Dict, cast
+
+from fastapi import APIRouter, HTTPException, status
 
 logger = logging.getLogger(__name__)
 
-sync_router = APIRouter(prefix="/api/sync", tags=["sync"])
+sync_router = APIRouter(prefix="/sync", tags=["sync"])
 
 # Global reference to auto sync manager (set from server.py)
 _auto_sync_manager = None
@@ -65,7 +66,7 @@ async def trigger_manual_sync() -> Dict[str, Any]:
 
     try:
         result = await _auto_sync_manager.trigger_manual_sync()
-        return result
+        return cast(Dict[str, Any], result)
     except Exception as e:
         logger.error(f"Error triggering manual sync: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

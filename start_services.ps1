@@ -15,7 +15,7 @@ if ($IsWindows) {
     Start-Process uvicorn "backend.server:app" -ArgumentList "--host 0.0.0.0 --port 8000 --workers 4"
 } else {
     # On macOS/Linux, run directly in the shell or use & for background
-    # Start-Process on macOS can be tricky with PATH. 
+    # Start-Process on macOS can be tricky with PATH.
     # Let's try running it directly.
     Write-Host "Starting uvicorn..."
     uvicorn backend.server:app --host 0.0.0.0 --port 8000 --workers 4

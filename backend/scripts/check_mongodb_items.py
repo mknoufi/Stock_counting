@@ -5,8 +5,9 @@ Quick script to check if MongoDB has items synced
 """
 
 import asyncio
-from motor.motor_asyncio import AsyncIOMotorClient
 import sys
+
+from motor.motor_asyncio import AsyncIOMotorClient
 
 
 async def check_items():

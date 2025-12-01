@@ -4,7 +4,7 @@ import { Toast } from './Toast';
 import { toastService } from '../services/toastService';
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'error' | 'info' | 'warning'; duration?: number }>>([]);
+  const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' | 'info' | 'warning'; duration?: number }[]>([]);
 
   useEffect(() => {
     const handleShow = (toast: any) => {

@@ -6,7 +6,8 @@ Tracks and stores application errors, exceptions, and system issues for monitori
 import logging
 import traceback
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 

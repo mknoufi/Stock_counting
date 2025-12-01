@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { NormalizedMrpVariant } from '@/types/scan';
-import { formatMrpValue, MRP_MATCH_TOLERANCE } from '@/constants/scanConstants';
+import { MRP_MATCH_TOLERANCE } from '@/constants/scanConstants';
 
 interface MRPVariantSelectorProps {
   variants: NormalizedMrpVariant[];
@@ -169,4 +169,3 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 });
-

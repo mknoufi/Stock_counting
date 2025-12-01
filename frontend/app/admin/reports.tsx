@@ -38,7 +38,7 @@ export default function ReportsScreen() {
       return;
     }
     loadReports();
-  }, []);
+  }, [hasRole, router]);
 
   const loadReports = async () => {
     try {

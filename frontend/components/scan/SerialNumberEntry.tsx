@@ -6,8 +6,7 @@ import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, Switch, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SerialInput } from '@/types/scan';
-import { SERIAL_REQUIREMENT_LABELS } from '@/constants/scanConstants';
-import { normalizeSerialValue } from '@/utils/scanUtils';
+
 
 interface SerialNumberEntryProps {
   serialInputs: SerialInput[];
@@ -69,7 +68,7 @@ export const SerialNumberEntry: React.FC<SerialNumberEntryProps> = ({
     onRemoveSerial(id);
   };
 
-  const completedSerialCount = serialInputs.filter((entry) => entry.value.trim().length > 0).length;
+
 
   return (
     <View style={styles.serialSection}>
@@ -288,4 +287,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-

@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Header } from '../../components/Header';
@@ -50,6 +51,17 @@ interface ColumnMapping {
   is_required: boolean;
 }
 
+const appFields = [
+  { key: 'item_code', label: 'Item Code', required: true },
+  { key: 'item_name', label: 'Item Name', required: true },
+  { key: 'barcode', label: 'Barcode', required: false },
+  { key: 'stock_qty', label: 'Stock Quantity', required: true },
+  { key: 'mrp', label: 'MRP', required: false },
+  { key: 'uom_code', label: 'UOM Code', required: false },
+  { key: 'category', label: 'Category', required: false },
+  { key: 'warehouse', label: 'Warehouse', required: false },
+];
+
 export default function DatabaseMappingScreen() {
   const router = useRouter();
   const theme = useTheme();
@@ -73,28 +85,14 @@ export default function DatabaseMappingScreen() {
   // UI states
   const [showColumnModal, setShowColumnModal] = useState(false);
   const [selectedAppField, setSelectedAppField] = useState<string>('');
-  const [currentMapping, setCurrentMapping] = useState<any>(null);
 
   // Standard app fields that need mapping
-  const appFields = [
-    { key: 'item_code', label: 'Item Code', required: true },
-    { key: 'item_name', label: 'Item Name', required: true },
-    { key: 'barcode', label: 'Barcode', required: false },
-    { key: 'stock_qty', label: 'Stock Quantity', required: true },
-    { key: 'mrp', label: 'MRP', required: false },
-    { key: 'uom_code', label: 'UOM Code', required: false },
-    { key: 'category', label: 'Category', required: false },
-    { key: 'warehouse', label: 'Warehouse', required: false },
-  ];
 
-  useEffect(() => {
-    loadDefaultConnectionParams();
-    loadCurrentMapping();
-  }, []);
 
-  const loadDefaultConnectionParams = async () => {
+
+
+  const loadDefaultConnectionParams = React.useCallback(async () => {
     try {
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
 
       // First, try to get ERP config from backend
       try {
@@ -108,7 +106,7 @@ export default function DatabaseMappingScreen() {
           if (config.schema) setSchema(config.schema || 'dbo');
           return; // Successfully loaded from backend, no need to check storage
         }
-      } catch (error: any) {
+      } catch {
         // If endpoint doesn't exist or fails, try AsyncStorage
         console.log('Could not load ERP config from backend, trying storage');
       }
@@ -130,13 +128,12 @@ export default function DatabaseMappingScreen() {
     } catch (error: any) {
       console.error('Failed to load default connection params:', error);
     }
-  };
+  }, []);
 
-  const loadCurrentMapping = async () => {
+  const loadCurrentMapping = React.useCallback(async () => {
     try {
       const response = await getCurrentMapping();
       if (response && response.mapping) {
-        setCurrentMapping(response.mapping);
         // Convert to mapping state
         if (response.mapping.columns) {
           const mappedColumns: Record<string, ColumnMapping> = {};
@@ -160,7 +157,12 @@ export default function DatabaseMappingScreen() {
     } catch (error: any) {
       console.error('Failed to load current mapping:', error);
     }
-  };
+  }, [selectedTable]);
+
+  useEffect(() => {
+    loadDefaultConnectionParams();
+    loadCurrentMapping();
+  }, [loadDefaultConnectionParams, loadCurrentMapping]);
 
   const handleLoadTables = async () => {
     if (!host || !database) {
@@ -317,7 +319,6 @@ export default function DatabaseMappingScreen() {
       const response = await saveMapping(config);
       if (response.success) {
         // Save connection parameters for next time
-        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
         await AsyncStorage.setItem('db_mapping_host', host);
         await AsyncStorage.setItem('db_mapping_port', port);
         await AsyncStorage.setItem('db_mapping_database', database);

@@ -16,14 +16,16 @@ interface StaffLayoutProps {
   title?: string;
   showFAB?: boolean;
   fabAction?: () => void;
-  headerActions?: Array<{
+  headerActions?: {
     icon: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap;
     label: string;
     onPress: () => void;
     badge?: number;
-  }>;
+  }[];
   style?: ViewStyle;
   testID?: string;
+  screenVariant?: 'default' | 'scrollable' | 'fullscreen';
+  backgroundColor?: string;
 }
 
 export const StaffLayout: React.FC<StaffLayoutProps> = ({
@@ -34,6 +36,8 @@ export const StaffLayout: React.FC<StaffLayoutProps> = ({
   headerActions = [],
   style,
   testID,
+  screenVariant = 'scrollable',
+  backgroundColor,
 }) => {
   const rawSegments = useSegments();
   const segments = Array.isArray(rawSegments) ? rawSegments : [];
@@ -45,10 +49,10 @@ export const StaffLayout: React.FC<StaffLayoutProps> = ({
     (segments[1] === 'home'
       ? 'Sessions'
       : segments[1] === 'scan'
-      ? 'Scan'
-      : segments[1] === 'history'
-      ? 'History'
-      : 'Staff');
+        ? 'Scan'
+        : segments[1] === 'history'
+          ? 'History'
+          : 'Staff');
 
   // Show back button if not on home screen
   const showBack = segments[1] !== 'home' && segments[1] !== undefined;
@@ -60,7 +64,7 @@ export const StaffLayout: React.FC<StaffLayoutProps> = ({
         showBack={showBack}
         actions={headerActions}
       />
-      <Screen variant="scrollable" style={styles.screen}>
+      <Screen variant={screenVariant} style={styles.screen} backgroundColor={backgroundColor}>
         {children}
       </Screen>
       {isMobile && <StaffTabBar />}

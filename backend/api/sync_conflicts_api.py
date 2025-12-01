@@ -3,16 +3,17 @@ Sync Conflicts API
 Endpoints for managing synchronization conflicts
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-from backend.services.sync_conflicts_service import (
-    SyncConflictsService,
-    ConflictStatus,
-    ConflictResolution,
-)
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+
 from backend.auth.permissions import Permission, require_permission
+from backend.services.sync_conflicts_service import (
+    ConflictResolution,
+    ConflictStatus,
+    SyncConflictsService,
+)
 
 sync_conflicts_router = APIRouter(prefix="/sync/conflicts", tags=["sync_conflicts"])
 

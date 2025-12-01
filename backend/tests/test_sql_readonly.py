@@ -2,9 +2,10 @@
 Test to verify SQL Server is read-only (no write operations)
 """
 
-import pytest
 import re
 from pathlib import Path
+
+import pytest
 
 
 def test_sql_server_connector_readonly():

@@ -5,9 +5,10 @@ Quick script to add test items for development/testing
 """
 
 import asyncio
-from motor.motor_asyncio import AsyncIOMotorClient
-from datetime import datetime
 import sys
+from datetime import datetime
+
+from motor.motor_asyncio import AsyncIOMotorClient
 
 
 async def add_test_items():

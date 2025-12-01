@@ -3,8 +3,8 @@ Structured Logging Configuration
 Provides JSON and text-based logging with different levels
 """
 
-import logging
 import json
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path

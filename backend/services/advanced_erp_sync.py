@@ -5,11 +5,13 @@ batch processing, and real-time capabilities
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
-from motor.motor_asyncio import AsyncIOMotorDatabase
-from backend.sql_server_connector import SQLServerConnector
 import time
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+from motor.motor_asyncio import AsyncIOMotorDatabase
+
+from backend.sql_server_connector import SQLServerConnector
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +107,9 @@ class AdvancedERPSyncService:
         Advanced sync with validation, batching, and monitoring
         """
         if not self.sql_connector.test_connection():
-            raise Exception("SQL Server connection not available")
+            from backend.exceptions import SQLServerConnectionError
+
+            raise SQLServerConnectionError("SQL Server connection not available")
 
         start_time = datetime.utcnow()
         stats = {
@@ -383,7 +387,9 @@ class AdvancedERPSyncService:
     async def sync_specific_items(self, item_codes: List[str]) -> Dict[str, Any]:
         """Sync specific items by item code"""
         if not self.sql_connector.test_connection():
-            raise Exception("SQL Server connection not available")
+            from backend.exceptions import SQLServerConnectionError
+
+            raise SQLServerConnectionError("SQL Server connection not available")
 
         stats = {"items_synced": 0, "items_failed": 0, "errors": []}
 

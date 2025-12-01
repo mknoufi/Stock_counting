@@ -16,7 +16,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ViewStyle,
-  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -182,9 +181,9 @@ export const ModernCard: React.FC<ModernCardProps> = ({
             </View>
           </View>
         )}
-        
+
         <View style={styles.body}>{children}</View>
-        
+
         {footer && (
           <View style={styles.footer}>{footer}</View>
         )}
@@ -208,7 +207,7 @@ export const ModernCard: React.FC<ModernCardProps> = ({
           testID={testID}
         >
           <LinearGradient
-            colors={colors as readonly [string, string, ...string[]]}
+            colors={colors as unknown as readonly [string, string, ...string[]]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.gradient}
@@ -295,4 +294,3 @@ const styles = StyleSheet.create({
 });
 
 export default ModernCard;
-

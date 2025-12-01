@@ -6,6 +6,7 @@
 import api from './api';
 import { searchItemsInCache } from './offlineStorage';
 import { isOnline } from './api';
+import { levenshteinDistance } from '../utils/algorithms';
 
 export interface SearchResult {
   item_code: string;
@@ -180,6 +181,15 @@ export class EnhancedSearchService {
     // Fuzzy match - all query characters appear in order
     if (this.fuzzyMatch(lowerText, lowerQuery)) {
       return 40;
+    }
+
+    // Levenshtein distance check for typos
+    const distance = levenshteinDistance(lowerText, lowerQuery);
+    const maxLen = Math.max(lowerText.length, lowerQuery.length);
+
+    // If distance is small (e.g. <= 2 edits) and strings are reasonably long
+    if (distance <= 2 && maxLen > 3) {
+      return 55 - (distance * 5);
     }
 
     // Character count match (for very short queries)

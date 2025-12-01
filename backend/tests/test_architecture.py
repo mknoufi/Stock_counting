@@ -2,9 +2,10 @@
 Test architecture - Verify SQL Server is read-only and MongoDB handles all writes
 """
 
-import pytest
-from pathlib import Path
 import re
+from pathlib import Path
+
+import pytest
 
 
 def test_mongodb_handles_all_writes():

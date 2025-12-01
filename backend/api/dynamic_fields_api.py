@@ -3,12 +3,14 @@ Dynamic Fields API
 Endpoints for managing custom dynamic fields for items
 """
 
-from fastapi import APIRouter, HTTPException, Depends
-from typing import List, Optional, Any, Dict
+import logging
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
 from backend.auth import get_current_user
 from backend.services.dynamic_fields_service import DynamicFieldsService
-import logging
 
 logger = logging.getLogger(__name__)
 

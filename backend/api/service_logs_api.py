@@ -2,13 +2,14 @@
 Service Logs API - Real-time log viewing for all services
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from typing import Optional
 import logging
-import platform
-from pathlib import Path
-from datetime import datetime
 import os
+import platform
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 try:
     from backend.auth.jwt import get_current_user

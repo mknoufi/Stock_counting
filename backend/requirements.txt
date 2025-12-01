@@ -1,12 +1,11 @@
-fastapi==0.115.5
+fastapi==0.115.6
 uvicorn[standard]==0.32.1
-boto3>=1.35.77
 requests-oauthlib>=2.0.0
 cryptography>=43.0.3
 python-dotenv>=1.0.1
 # Motor 3.6.0 requires pymongo < 4.10; align accordingly
 pymongo>=4.9.0,<4.10
-pydantic>=2.10.3
+pydantic==2.12.5
 pydantic-settings>=2.7.0
 email-validator>=2.2.0
 pyjwt>=2.10.1
@@ -25,7 +24,7 @@ mypy>=1.13.0
 requests>=2.32.3
 orjson>=3.10.12
 pandas>=2.2.3
-numpy>=2.2.1
+numpy>=2.0.2
 python-multipart>=0.0.17
 jq>=1.8.0
 typer>=0.15.1
@@ -51,3 +50,4 @@ setuptools>=78.1.1
 aiohttp>=3.9.0
 memory-profiler>=0.61.0
 asgi-lifespan>=2.1.0
+pytest-cov==7.0.0

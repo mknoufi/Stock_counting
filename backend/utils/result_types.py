@@ -3,9 +3,9 @@ Modern Result Type for Zero-Error Error Handling (2024/2025 Best Practice)
 Type-safe error handling without exceptions where possible
 """
 
-from typing import Generic, TypeVar, Optional, Callable, Any
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Callable, Generic, Optional, TypeVar
 
 T = TypeVar("T")
 E = TypeVar("E", bound=Exception)

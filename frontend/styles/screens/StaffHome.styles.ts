@@ -13,6 +13,8 @@ export const staffHomeStyles = StyleSheet.create({
     borderRadius: borderRadius.md,
     marginBottom: spacing.xs,
     borderWidth: 1,
+    backgroundColor: colors.surfaceDark,
+    borderColor: colors.borderLight,
   },
   sessionHeader: {
     flexDirection: 'row',
@@ -23,6 +25,7 @@ export const staffHomeStyles = StyleSheet.create({
   sessionWarehouse: {
     ...typography.h5,
     fontSize: 16,
+    color: colors.textPrimary,
   },
   statusBadge: {
     paddingHorizontal: spacing.xs,
@@ -39,6 +42,7 @@ export const staffHomeStyles = StyleSheet.create({
     ...typography.bodySmall,
     fontSize: 12,
     marginBottom: 6,
+    color: colors.textSecondary,
   },
   sessionStats: {
     flexDirection: 'row',
@@ -46,11 +50,13 @@ export const staffHomeStyles = StyleSheet.create({
   },
   sessionStat: {
     ...typography.bodySmall,
+    color: colors.textSecondary,
   },
   emptyText: {
     textAlign: 'center',
     marginTop: spacing.xl,
     ...typography.body,
+    color: colors.textSecondary,
   },
   modalContainer: {
     flex: 1,
@@ -66,14 +72,17 @@ export const staffHomeStyles = StyleSheet.create({
     padding: spacing.lg,
     width: 320,
     maxWidth: '90%',
+    backgroundColor: colors.surfaceDark,
   },
   modalTitle: {
     ...typography.h3,
     marginBottom: spacing.md,
+    color: colors.textPrimary,
   },
   modalLabel: {
     ...typography.bodySmall,
     marginBottom: spacing.xs,
+    color: colors.textSecondary,
   },
   modalInput: {
     borderWidth: 1,
@@ -81,6 +90,9 @@ export const staffHomeStyles = StyleSheet.create({
     padding: spacing.sm,
     ...typography.body,
     marginBottom: spacing.lg,
+    backgroundColor: colors.backgroundDark,
+    borderColor: colors.borderLight,
+    color: colors.textPrimary,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -98,6 +110,8 @@ export const staffHomeStyles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     borderWidth: 1,
+    backgroundColor: colors.surfaceDark,
+    borderColor: colors.borderLight,
   },
   mrpModalHeader: {
     flexDirection: 'row',
@@ -107,10 +121,12 @@ export const staffHomeStyles = StyleSheet.create({
   },
   mrpModalTitle: {
     ...typography.h3,
+    color: colors.textPrimary,
   },
   mrpModalSubtitle: {
     ...typography.body,
     marginBottom: spacing.sm,
+    color: colors.textSecondary,
   },
   mrpSearchContainer: {
     flexDirection: 'row',
@@ -121,10 +137,13 @@ export const staffHomeStyles = StyleSheet.create({
     gap: spacing.xs,
     marginBottom: spacing.md,
     borderWidth: 1,
+    backgroundColor: colors.backgroundDark,
+    borderColor: colors.borderLight,
   },
   mrpSearchInput: {
     flex: 1,
     ...typography.body,
+    color: colors.textPrimary,
   },
   mrpSearchResults: {
     maxHeight: 400,
@@ -137,6 +156,8 @@ export const staffHomeStyles = StyleSheet.create({
     borderRadius: borderRadius.sm,
     marginBottom: spacing.xs,
     borderWidth: 1,
+    backgroundColor: colors.backgroundDark,
+    borderColor: colors.borderLight,
   },
   mrpResultContent: {
     flex: 1,
@@ -145,47 +166,58 @@ export const staffHomeStyles = StyleSheet.create({
     ...typography.body,
     fontWeight: '600',
     marginBottom: 4,
+    color: colors.textPrimary,
   },
   mrpResultCode: {
     ...typography.bodySmall,
     marginBottom: 2,
+    color: colors.textSecondary,
   },
   mrpResultBarcode: {
     ...typography.bodySmall,
     marginBottom: 2,
+    color: colors.textSecondary,
   },
   mrpResultMRP: {
     ...typography.bodySmall,
     fontWeight: '600',
     marginTop: 4,
+    color: colors.warning,
   },
   selectedItemCard: {
     padding: spacing.md,
     borderRadius: borderRadius.sm,
     marginBottom: spacing.lg,
     borderWidth: 2,
+    backgroundColor: colors.backgroundDark,
+    borderColor: colors.primary,
   },
   selectedItemName: {
     ...typography.h4,
     marginBottom: spacing.xs,
+    color: colors.textPrimary,
   },
   selectedItemCode: {
     ...typography.bodySmall,
     marginBottom: 4,
+    color: colors.textSecondary,
   },
   selectedItemBarcode: {
     ...typography.bodySmall,
     marginBottom: 4,
+    color: colors.textSecondary,
   },
   selectedItemCurrentMRP: {
     ...typography.body,
     fontWeight: '600',
     marginTop: spacing.xs,
+    color: colors.warning,
   },
   mrpInputLabel: {
     ...typography.body,
     fontWeight: '600',
     marginBottom: spacing.xs,
+    color: colors.textPrimary,
   },
   mrpInput: {
     borderRadius: borderRadius.sm,
@@ -194,6 +226,9 @@ export const staffHomeStyles = StyleSheet.create({
     ...typography.h4,
     borderWidth: 1,
     marginBottom: spacing.lg,
+    backgroundColor: colors.backgroundDark,
+    borderColor: colors.borderLight,
+    color: colors.textPrimary,
   },
   mrpButtonContainer: {
     flexDirection: 'row',
@@ -206,4 +241,3 @@ export const staffHomeColors = {
   warning: colors.warning,
   success: colors.success,
 };
-

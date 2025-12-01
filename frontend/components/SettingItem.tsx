@@ -12,7 +12,7 @@ interface SettingItemProps {
   value: any;
   type: 'switch' | 'select' | 'slider' | 'number';
   onValueChange: (value: any) => void;
-  options?: Array<{ label: string; value: any }>;
+  options?: { label: string; value: any }[];
   min?: number;
   max?: number;
   step?: number;

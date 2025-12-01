@@ -3,10 +3,11 @@ Data Validation Service - Ensures data integrity across all database operations
 """
 
 import logging
-from datetime import datetime
-from typing import Dict, Any, List, Tuple
-from motor.motor_asyncio import AsyncIOMotorDatabase
 import re
+from datetime import datetime
+from typing import Any, Dict, List, Tuple
+
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -108,11 +109,11 @@ class DataValidationService:
                 if not isinstance(data[field], expected_type):
                     try:
                         # Try type conversion
-                        if expected_type == float:
+                        if expected_type is float:
                             data[field] = float(data[field])
-                        elif expected_type == int:
+                        elif expected_type is int:
                             data[field] = int(data[field])
-                        elif expected_type == str:
+                        elif expected_type is str:
                             data[field] = str(data[field])
                     except (ValueError, TypeError):
                         errors.append(

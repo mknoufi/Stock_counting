@@ -47,3 +47,15 @@ def get_client() -> AsyncIOMotorClient:
     if _MONGO_CLIENT is None:
         raise RuntimeError("Mongo client has not been initialised. Ensure lifespan is configured.")
     return _MONGO_CLIENT
+
+
+def set_db(db: AsyncIOMotorDatabase) -> None:
+    """Set the active database instance."""
+    global _DATABASE
+    _DATABASE = db
+
+
+def set_client(client: AsyncIOMotorClient) -> None:
+    """Set the active mongo client."""
+    global _MONGO_CLIENT
+    _MONGO_CLIENT = client

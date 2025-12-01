@@ -8,22 +8,28 @@ import { View, Text, TextInput, StyleSheet } from 'react-native';
 interface LocationInputProps {
   floorNo: string;
   rackNo?: string;
+  shelfNo?: string;
   markLocation: string;
   onFloorChange: (floorNo: string) => void;
   onRackChange?: (rackNo: string) => void;
+  onShelfChange?: (shelfNo: string) => void;
   onMarkLocationChange: (markLocation: string) => void;
   showRack?: boolean;
+  showShelf?: boolean;
   onActivityReset?: () => void;
 }
 
 export const LocationInput: React.FC<LocationInputProps> = ({
   floorNo,
   rackNo = '',
+  shelfNo = '',
   markLocation,
   onFloorChange,
   onRackChange,
+  onShelfChange,
   onMarkLocationChange,
   showRack = false,
+  showShelf = true,
   onActivityReset,
 }) => {
   const handleFloorChange = (text: string) => {
@@ -34,6 +40,11 @@ export const LocationInput: React.FC<LocationInputProps> = ({
   const handleRackChange = (text: string) => {
     onActivityReset?.();
     onRackChange?.(text);
+  };
+
+  const handleShelfChange = (text: string) => {
+    onActivityReset?.();
+    onShelfChange?.(text);
   };
 
   const handleMarkLocationChange = (text: string) => {
@@ -66,6 +77,20 @@ export const LocationInput: React.FC<LocationInputProps> = ({
               placeholderTextColor="#94A3B8"
               value={rackNo}
               onChangeText={handleRackChange}
+              autoCapitalize="characters"
+            />
+          </View>
+        )}
+
+        {showShelf && onShelfChange && (
+          <View style={styles.locationInputGroup}>
+            <Text style={styles.fieldLabel}>Shelf No</Text>
+            <TextInput
+              style={styles.locationInput}
+              placeholder="e.g., 1, 2, 3"
+              placeholderTextColor="#94A3B8"
+              value={shelfNo}
+              onChangeText={handleShelfChange}
               autoCapitalize="characters"
             />
           </View>
@@ -118,4 +143,3 @@ const styles = StyleSheet.create({
     borderColor: '#334155',
   },
 });
-

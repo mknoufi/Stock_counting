@@ -3,9 +3,12 @@
  * Displays item information, stock quantity, MRP, and verification status
  */
 import React from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Item } from '@/types/scan';
+import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import { flags } from '@/constants/flags';
 
 interface ItemDisplayProps {
   item: Item;
@@ -18,90 +21,105 @@ export const ItemDisplay: React.FC<ItemDisplayProps> = React.memo(({
   refreshingStock = false,
   onRefreshStock,
 }) => {
-  return (
-    <View style={styles.itemCard}>
-      <Text style={styles.itemName}>{item.name}</Text>
-      {item.item_code && <Text style={styles.itemCode}>Code: {item.item_code}</Text>}
-      {item.barcode && <Text style={styles.itemBarcode}>Barcode: {item.barcode}</Text>}
+  const Container = flags.enableAnimations ? Animated.View : View;
+  const animatedProps = flags.enableAnimations ? {
+    entering: FadeInUp.delay(100).springify().damping(12),
+    layout: Layout.springify().damping(12),
+  } : {};
 
-      {/* Additional Item Information */}
-      <View style={styles.itemInfoGrid}>
-        {item.category && (
-          <View style={styles.itemInfoItem}>
-            <Ionicons name="pricetag" size={14} color="#666" />
-            <Text style={styles.itemInfoText}>
-              {item.category}
-              {item.subcategory && ` • ${item.subcategory}`}
+  return (
+    <Container style={[styles.itemCard, styles.shadow]} {...animatedProps}>
+      <LinearGradient
+        colors={['#1E293B', '#0F172A']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+
+      <View style={styles.contentContainer}>
+        <Text style={styles.itemName}>{item.name}</Text>
+        {item.item_code && <Text style={styles.itemCode}>Code: {item.item_code}</Text>}
+        {item.barcode && <Text style={styles.itemBarcode}>Barcode: {item.barcode}</Text>}
+
+        {/* Additional Item Information */}
+        <View style={styles.itemInfoGrid}>
+          {item.category && (
+            <View style={styles.itemInfoItem}>
+              <Ionicons name="pricetag" size={14} color="#94A3B8" />
+              <Text style={styles.itemInfoText}>
+                {item.category}
+                {item.subcategory && ` • ${item.subcategory}`}
+              </Text>
+            </View>
+          )}
+          {item.item_type && (
+            <View style={styles.itemInfoItem}>
+              <Ionicons name="layers" size={14} color="#94A3B8" />
+              <Text style={styles.itemInfoText}>Type: {item.item_type}</Text>
+            </View>
+          )}
+          {item.item_group && (
+            <View style={styles.itemInfoItem}>
+              <Ionicons name="albums" size={14} color="#94A3B8" />
+              <Text style={styles.itemInfoText}>Group: {item.item_group}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Location Display */}
+        {(item.location || (item as any).floor || (item as any).rack) && (
+          <View style={styles.locationRow}>
+            <Ionicons name="location" size={16} color="#38BDF8" />
+            <Text style={styles.locationText}>
+              {[(item as any).floor, (item as any).rack, item.location].filter(Boolean).join(' / ')}
             </Text>
           </View>
         )}
-        {item.item_type && (
-          <View style={styles.itemInfoItem}>
-            <Ionicons name="layers" size={14} color="#666" />
-            <Text style={styles.itemInfoText}>Type: {item.item_type}</Text>
+
+        {/* Verification Badge */}
+        {(item as any).verified && (
+          <View style={styles.verificationBadge}>
+            <Ionicons name="checkmark-circle" size={16} color="#4ADE80" />
+            <Text style={styles.verificationText}>
+              Verified by {(item as any).verified_by || 'Unknown'}
+              {(item as any).verified_at && (
+                <Text style={styles.verificationTime}>
+                  {' '}• {new Date((item as any).verified_at).toLocaleString()}
+                </Text>
+              )}
+            </Text>
           </View>
         )}
-        {item.item_group && (
-          <View style={styles.itemInfoItem}>
-            <Ionicons name="albums" size={14} color="#666" />
-            <Text style={styles.itemInfoText}>Group: {item.item_group}</Text>
+
+        {/* Stock and MRP Row */}
+        <View style={styles.qtyRow}>
+          <View style={styles.qtyBox}>
+            <View style={styles.qtyHeader}>
+              <Text style={styles.qtyLabel}>ERP Stock</Text>
+              {onRefreshStock && (
+                <TouchableOpacity
+                  style={[styles.refreshButton, refreshingStock && styles.refreshButtonDisabled]}
+                  onPress={onRefreshStock}
+                  disabled={refreshingStock}
+                >
+                  {refreshingStock ? (
+                    <ActivityIndicator size="small" color="#38BDF8" />
+                  ) : (
+                    <Ionicons name="refresh" size={18} color="#38BDF8" />
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={styles.qtyValue}>{item.stock_qty ?? item.quantity ?? 0}</Text>
+            {item.uom_name && <Text style={styles.uomText}>{item.uom_name}</Text>}
           </View>
-        )}
-      </View>
-
-      {/* Location Display */}
-      {(item.location || (item as any).floor || (item as any).rack) && (
-        <View style={styles.locationRow}>
-          <Ionicons name="location" size={16} color="#666" />
-          <Text style={styles.locationText}>
-            {[(item as any).floor, (item as any).rack, item.location].filter(Boolean).join(' / ')}
-          </Text>
-        </View>
-      )}
-
-      {/* Verification Badge */}
-      {(item as any).verified && (
-        <View style={styles.verificationBadge}>
-          <Ionicons name="checkmark-circle" size={16} color="#3B82F6" />
-          <Text style={styles.verificationText}>
-            Verified by {(item as any).verified_by || 'Unknown'}
-            {(item as any).verified_at && (
-              <Text style={styles.verificationTime}>
-                {' '}• {new Date((item as any).verified_at).toLocaleString()}
-              </Text>
-            )}
-          </Text>
-        </View>
-      )}
-
-      {/* Stock and MRP Row */}
-      <View style={styles.qtyRow}>
-        <View style={styles.qtyBox}>
-          <View style={styles.qtyHeader}>
-            <Text style={styles.qtyLabel}>ERP Stock</Text>
-            {onRefreshStock && (
-              <TouchableOpacity
-                style={[styles.refreshButton, refreshingStock && styles.refreshButtonDisabled]}
-                onPress={onRefreshStock}
-                disabled={refreshingStock}
-              >
-                {refreshingStock ? (
-                  <ActivityIndicator size="small" color="#3B82F6" />
-                ) : (
-                  <Ionicons name="refresh" size={18} color="#3B82F6" />
-                )}
-              </TouchableOpacity>
-            )}
+          <View style={styles.qtyBox}>
+            <Text style={styles.qtyLabel}>MRP</Text>
+            <Text style={styles.qtyValue}>₹{item.mrp ?? '0.00'}</Text>
           </View>
-          <Text style={styles.qtyValue}>{item.stock_qty ?? item.quantity ?? 0}</Text>
-          {item.uom_name && <Text style={styles.uomText}>{item.uom_name}</Text>}
-        </View>
-        <View style={styles.qtyBox}>
-          <Text style={styles.qtyLabel}>MRP</Text>
-          <Text style={styles.qtyValue}>₹{item.mrp ?? '0.00'}</Text>
         </View>
       </View>
-    </View>
+    </Container>
   );
 }, (prevProps, nextProps) => {
   // Custom comparison function for React.memo
@@ -113,14 +131,34 @@ export const ItemDisplay: React.FC<ItemDisplayProps> = React.memo(({
   );
 });
 
+ItemDisplay.displayName = 'ItemDisplay';
+
 const styles = StyleSheet.create({
   itemCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 24,
     marginBottom: 16,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  shadow: {
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+      web: {
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+      },
+    }),
+  },
+  contentContainer: {
+    padding: 24,
   },
   itemName: {
     fontSize: 22,
@@ -226,4 +264,3 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 });
-

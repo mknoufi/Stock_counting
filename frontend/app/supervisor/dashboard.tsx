@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, Modal, TextInput, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, TextInput, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +13,7 @@ import { AppLogo } from '../../components/AppLogo';
 import { flags } from '../../constants/flags';
 import { getQueueCount } from '../../services/offlineQueue';
 
-const { width } = Dimensions.get('window');
+
 
 export default function SupervisorDashboard() {
   const [sessions, setSessions] = React.useState([]);
@@ -77,7 +77,7 @@ export default function SupervisorDashboard() {
       try {
         const q = await getQueueCount();
         if (mounted) setQueuedCount(q);
-      } catch {}
+      } catch { }
     };
     tick();
     const id = setInterval(tick, 5000);
@@ -140,7 +140,7 @@ export default function SupervisorDashboard() {
         };
         setStats(calculatedStats);
       }
-    } catch (error) {
+    } catch {
       // Error logged via error handler
       Alert.alert('Error', 'Failed to load sessions');
     } finally {
@@ -236,7 +236,7 @@ export default function SupervisorDashboard() {
       } else {
         Alert.alert('Error', 'Failed to load analytics');
       }
-    } catch (error) {
+    } catch {
       // Error logged via error handler
       Alert.alert('Error', 'Failed to load analytics');
     } finally {
@@ -269,7 +269,7 @@ export default function SupervisorDashboard() {
 
       const data = await response.json();
       setMrpSearchResults(data.items || data || []);
-    } catch (error) {
+    } catch {
       // Error logged via error handler
       Alert.alert('Error', 'Failed to search items');
     } finally {
@@ -449,7 +449,7 @@ export default function SupervisorDashboard() {
                         setTimeout(() => {
                           router.replace('/login');
                         }, 100);
-                      } catch (error) {
+                      } catch {
                         // Error logged via error handler
                         Alert.alert('Error', 'Failed to logout. Please try again.');
                       }
@@ -1811,7 +1811,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   analyticsCard: {
-    width: (width * 0.85 - 60) / 2, // Two columns with gaps
+    width: (Dimensions.get('window').width * 0.85 - 60) / 2, // Two columns with gaps
     backgroundColor: '#333',
     padding: 16,
     borderRadius: 12,

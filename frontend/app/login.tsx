@@ -7,15 +7,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ActivityIndicator,
-  Pressable,
   TouchableOpacity,
   Animated,
+  Pressable,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments, Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAuthStore } from '@/store/authStore';
+import { SystemStatus } from '@/components/SystemStatus';
 import { StatusBar } from 'expo-status-bar';
 import { storage } from '@/services/asyncStorageService';
 import { AppLogo } from '@/components/AppLogo';
@@ -23,12 +22,11 @@ import EnhancedTextInput from '@/components/forms/EnhancedTextInput';
 import EnhancedButton from '@/components/forms/EnhancedButton';
 import { useFormValidation } from '@/hooks/useFormValidation';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
-import usePowerSaving from '@/hooks/usePowerSaving';
-import PowerSavingIndicator from '@/components/PowerSavingIndicator';
 import { colors, spacing, typography, borderRadius, shadows } from '@/styles/globalStyles';
 import { runFullDiagnostics } from '@/utils/loginDiagnostics';
-import { useSegments } from 'expo-router';
+
 import { LoginDiagnosticsPanel } from '@/components/LoginDiagnosticsPanel';
+import { useAuthStore, AuthState } from '@/store/authStore';
 
 const STORAGE_KEYS = {
   REMEMBERED_USERNAME: 'remembered_username_v1',
@@ -46,9 +44,9 @@ export default function LoginScreen() {
 
   const router = useRouter();
   const segments = useSegments();
-  const login = useAuthStore((state) => state.login);
-  const user = useAuthStore((state) => state.user);
-  const isLoading = useAuthStore((state) => state.isLoading);
+  const login = useAuthStore((state: AuthState) => state.login);
+  const user = useAuthStore((state: AuthState) => state.user);
+  const isLoading = useAuthStore((state: AuthState) => state.isLoading);
 
   if (__DEV__) {
     // Auth state loaded
@@ -56,16 +54,7 @@ export default function LoginScreen() {
   const passwordInputRef = useRef<TextInput>(null);
   const isMounted = useRef(true);
 
-  // Power saving integration
-  const {
-    powerState,
-    shouldDisableFeature,
-    throttleNetworkRequest,
-    resetActivityTimer,
-  } = usePowerSaving({
-    autoDisplayOff: true,
-    displayOffTimeout: 120000, // 2 minutes for login screen
-  });
+
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -324,9 +313,9 @@ export default function LoginScreen() {
 
       if (__DEV__) {
         console.log('🌐 LoginScreen loaded on WEB platform');
-          console.log('🌐 Window location:', typeof window !== 'undefined' ? window.location.href : 'N/A');
-          console.log('🌐 Auth state:', { hasUser: !!user, isLoading, userRole: user?.role });
-          console.log('🌐 Form state:', {
+        console.log('🌐 Window location:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+        console.log('🌐 Auth state:', { hasUser: !!user, isLoading, userRole: user?.role });
+        console.log('🌐 Form state:', {
           hasUsername: !!values.username,
           hasPassword: !!values.password,
           isSubmitting,
@@ -388,7 +377,7 @@ export default function LoginScreen() {
       };
     }
     return undefined;
-  }, [values.username, values.password, isSubmitting, errors, user, isLoading]);
+  }, [values, isSubmitting, errors, user, isLoading, touched, segments]);
 
   // Redirect if already logged in (let _layout handle it, but also check here as backup)
   useEffect(() => {
@@ -408,7 +397,7 @@ export default function LoginScreen() {
 
       // Small delay to ensure state is ready
       const redirectTimer = setTimeout(() => {
-        router.replace(targetRoute as any);
+        router.replace(targetRoute as Href);
       }, 100);
 
       return () => clearTimeout(redirectTimer);
@@ -418,25 +407,20 @@ export default function LoginScreen() {
 
   // Entry animation
   useEffect(() => {
-    if (!shouldDisableFeature('animation')) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 50,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      fadeAnim.setValue(1);
-      slideAnim.setValue(0);
-    }
-  }, [fadeAnim, slideAnim, shouldDisableFeature]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -505,7 +489,7 @@ export default function LoginScreen() {
     const sanitizedUsername = values.username.trim();
     stepLog(4, 'Starting login', { username: sanitizedUsername, passwordLength: values.password.length, rememberMe });
 
-    resetActivityTimer(); // Keep screen on during login
+
 
     try {
       stepLog(5, 'Calling authStore.login()');
@@ -587,7 +571,7 @@ export default function LoginScreen() {
 
           // Fallback to router for mobile
           stepLog(8.2, 'Using router.replace for redirect');
-          router.replace(targetRoute as any);
+          router.replace(targetRoute as Href);
           stepLog(9, 'Router redirect initiated');
         } else {
           stepLog(8, '⚠️ No user found after login - letting _layout handle redirect');
@@ -601,12 +585,18 @@ export default function LoginScreen() {
     } catch (err: unknown) {
       stepLog(10, '❌ Exception caught in login handler');
       const fallback = 'Login failed. Please try again.';
-      const axiosError = err as { message?: string; response?: { data?: { detail?: { message?: string }; message?: string } } };
-      const msg =
-        axiosError?.message ||
-        axiosError?.response?.data?.detail?.message ||
-        axiosError?.response?.data?.message ||
-        fallback;
+      const axiosError = err as { message?: string; response?: { data?: { detail?: { message?: string } | string; message?: string } } };
+      let msg = 'Login failed. Please try again.';
+      
+      if (axiosError?.response?.data?.detail) {
+        const detail = axiosError.response.data.detail;
+        msg = typeof detail === 'string' ? detail : (detail.message || JSON.stringify(detail));
+      } else if (axiosError?.response?.data?.message) {
+        msg = axiosError.response.data.message;
+      } else if (axiosError?.message) {
+        msg = axiosError.message;
+      }
+      
       stepLog(10.1, 'Error message extracted', { message: msg, error: err });
       setFieldError('password', msg);
     } finally {
@@ -639,23 +629,16 @@ export default function LoginScreen() {
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Power Saving Indicator */}
-      <View
-        style={styles.powerIndicatorContainer}
-        pointerEvents="box-none"
-      >
-        <PowerSavingIndicator powerState={powerState} compact />
-      </View>
+
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, Platform.OS === 'web' && styles.scrollContentWeb]}
         keyboardShouldPersistTaps="handled"
         style={Platform.OS === 'web' ? styles.scrollViewWeb : undefined}
-        onScroll={resetActivityTimer}
         scrollEventThrottle={16}
         {...(Platform.OS === 'web' ? {
           pointerEvents: 'auto' as const,
-          onMouseUp: (e: any) => {
+          onMouseUp: (e: React.MouseEvent) => {
             // Clear selection on double-click, but don't prevent the click
             if (e.detail === 2 && window.getSelection) {
               const selection = window.getSelection();
@@ -670,12 +653,11 @@ export default function LoginScreen() {
         <TouchableOpacity
           style={[styles.backButton, Platform.OS === 'web' && { cursor: 'pointer' }]}
           onPress={() => {
-            resetActivityTimer();
             router.back();
           }}
           accessibilityLabel="Go back"
           {...(Platform.OS === 'web' ? {
-            onSelectStart: (e: any) => {
+            onSelectStart: (e: React.SyntheticEvent) => {
               e.preventDefault();
             },
           } : {})}
@@ -695,15 +677,7 @@ export default function LoginScreen() {
           <AppLogo size="large" showText={true} variant="default" />
         </Animated.View>
 
-        {/* Low battery warning */}
-        {powerState.displayDimmed && (
-          <View style={styles.batteryWarning}>
-            <Ionicons name="moon-outline" size={16} color={colors.warning} />
-            <Text style={styles.batteryWarningText}>
-              Screen dimmed to save battery. Tap to restore brightness.
-            </Text>
-          </View>
-        )}
+
 
         {/* Web: Wrap in proper HTML form element for password manager support */}
         {Platform.OS === 'web' ? (
@@ -759,6 +733,9 @@ export default function LoginScreen() {
                   error={touched.password ? errors.password : undefined}
                   editable={!(isSubmitting || isLoading)}
                   secureTextEntry={!showPassword}
+                  rightIcon={showPassword ? 'eye-off' : 'eye'}
+                  rightIconColor="#fff"
+                  onRightIconPress={() => setShowPassword(!showPassword)}
                   autoComplete="current-password"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -778,7 +755,7 @@ export default function LoginScreen() {
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: rememberMe }}
                   {...(Platform.OS === 'web' ? {
-                    onSelectStart: (e: any) => {
+                    onSelectStart: (e: React.SyntheticEvent) => {
                       e.preventDefault();
                     },
                   } : {})}
@@ -872,6 +849,9 @@ export default function LoginScreen() {
               error={touched.password ? errors.password : undefined}
               editable={!(isSubmitting || isLoading)}
               secureTextEntry={!showPassword}
+              rightIcon={showPassword ? 'eye-off' : 'eye'}
+              rightIconColor="#fff"
+              onRightIconPress={() => setShowPassword(!showPassword)}
               autoComplete="current-password"
               autoCapitalize="none"
               autoCorrect={false}
@@ -935,6 +915,9 @@ export default function LoginScreen() {
         )}
       </ScrollView>
 
+      {/* System Status Indicator */}
+      <SystemStatus />
+
       {/* Diagnostics Panel */}
       {__DEV__ && (
         <LoginDiagnosticsPanel
@@ -947,7 +930,6 @@ export default function LoginScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      onTouchStart={resetActivityTimer}
     >
       <StatusBar style="light" />
       <LinearGradient
@@ -955,25 +937,17 @@ export default function LoginScreen() {
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Power Saving Indicator */}
-      <View
-        style={styles.powerIndicatorContainer}
-        pointerEvents="box-none"
-      >
-        <PowerSavingIndicator powerState={powerState} compact />
-      </View>
+
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
-        onScroll={resetActivityTimer}
         scrollEventThrottle={16}
       >
         {/* Back Button */}
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => {
-            resetActivityTimer();
             router.back();
           }}
           accessibilityLabel="Go back"
@@ -993,15 +967,7 @@ export default function LoginScreen() {
           <AppLogo size="large" showText={true} variant="default" />
         </Animated.View>
 
-        {/* Low battery warning */}
-        {powerState.displayDimmed && (
-          <View style={styles.batteryWarning}>
-            <Ionicons name="moon-outline" size={16} color={colors.warning} />
-            <Text style={styles.batteryWarningText}>
-              Screen dimmed to save battery. Tap to restore brightness.
-            </Text>
-          </View>
-        )}
+
 
         {/* Mobile: Direct View without form wrapper */}
         <View style={styles.form}>
@@ -1090,13 +1056,17 @@ export default function LoginScreen() {
           </View>
 
           {/* Demo Accounts Info */}
-          <View style={styles.infoBox}>
-            <Text style={styles.infoText}>Demo Accounts:</Text>
-            <Text style={styles.infoText}>Staff: staff1 / staff123</Text>
-            <Text style={styles.infoText}>
-              Supervisor: supervisor / super123
-            </Text>
-            <Text style={styles.infoText}>Admin: admin / admin123</Text>
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Version 2.1.0</Text>
+            <SystemStatus />
+            <View style={styles.infoBox}>
+              <Text style={styles.infoText}>Demo Accounts:</Text>
+              <Text style={styles.infoText}>Staff: staff1 / staff123</Text>
+              <Text style={styles.infoText}>
+                Supervisor: supervisor / super123
+              </Text>
+              <Text style={styles.infoText}>Admin: admin / admin123</Text>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -1130,12 +1100,7 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 60,
   } as any,
-  powerIndicatorContainer: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 20,
-  },
+
   backButton: {
     position: 'absolute',
     top: 48,
@@ -1147,22 +1112,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xxl,
   },
-  batteryWarning: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${colors.warning}20`,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.warning,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  batteryWarningText: {
-    color: colors.warning,
-    fontSize: typography.bodySmall.fontSize,
-    flex: 1,
-  },
+
   formWrapper: {
     width: '100%',
     maxWidth: 400,
@@ -1235,5 +1185,15 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
     fontSize: typography.bodySmall.fontSize,
     marginBottom: 4,
+  },
+  footer: {
+    marginTop: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingBottom: spacing.xl,
+  },
+  footerText: {
+    color: colors.textTertiary,
+    fontSize: typography.bodySmall.fontSize,
   },
 });

@@ -5,14 +5,15 @@ Tests MongoDB connection from backend perspective
 """
 
 import asyncio
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+# ruff: noqa: E402
 from motor.motor_asyncio import AsyncIOMotorClient
 
 # Import settings with fallback
@@ -20,6 +21,7 @@ try:
     from backend.config import settings
 except ImportError:
     import os
+
     from dotenv import load_dotenv
 
     load_dotenv()

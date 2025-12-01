@@ -5,11 +5,11 @@ Zero-error async patterns, connection pooling, and performance optimization
 
 import asyncio
 import logging
-from typing import TypeVar, Callable, Optional, List, Any, Coroutine
-from functools import wraps
-from contextlib import asynccontextmanager
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
+from functools import wraps
+from typing import Any, Callable, Coroutine, List, Optional, TypeVar
 
 from backend.utils.result_types import Result
 

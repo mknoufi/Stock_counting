@@ -3,10 +3,11 @@ Self-Diagnosis API Endpoints
 Provide real-time error diagnosis and health monitoring
 """
 
-from fastapi import APIRouter, HTTPException, Depends
-from typing import Dict, Any
-from datetime import timedelta
 import logging
+from datetime import timedelta
+from typing import Any, Dict
+
+from fastapi import APIRouter, Depends, HTTPException
 
 from backend.auth.dependencies import get_current_user_async as get_current_user
 from backend.services.auto_diagnosis import AutoDiagnosisService
@@ -27,7 +28,7 @@ def get_auto_diagnosis() -> AutoDiagnosisService:
 
 logger = logging.getLogger(__name__)
 
-self_diagnosis_router = APIRouter(prefix="/api/diagnosis", tags=["Self-Diagnosis"])
+self_diagnosis_router = APIRouter(tags=["Self-Diagnosis"])
 
 
 @self_diagnosis_router.get("/health")
@@ -45,7 +46,9 @@ async def get_health_with_diagnosis(current_user: dict = Depends(get_current_use
 
 
 @self_diagnosis_router.get("/statistics")
-async def get_error_statistics(hours: int = 24, current_user: dict = Depends(get_current_user)):
+async def get_error_statistics(
+    hours: int = 24, current_user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
     """
     Get error statistics with analysis
     """
@@ -61,8 +64,8 @@ async def get_error_statistics(hours: int = 24, current_user: dict = Depends(get
 
 @self_diagnosis_router.post("/diagnose")
 async def diagnose_error_endpoint(
-    error_info: Dict[str, Any], current_user: dict = Depends(get_current_user)
-):
+    error_info: Dict[str, Any], current_user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
     """
     Manually diagnose an error
     """
@@ -104,8 +107,8 @@ async def diagnose_error_endpoint(
 
 @self_diagnosis_router.post("/auto-fix")
 async def attempt_auto_fix(
-    error_info: Dict[str, Any], current_user: dict = Depends(get_current_user)
-):
+    error_info: Dict[str, Any], current_user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
     """
     Attempt to auto-fix an error
     """

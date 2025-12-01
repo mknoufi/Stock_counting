@@ -3,8 +3,9 @@ API v2 Connection Status Endpoints
 Monitor and manage database connections
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from typing import Dict, Any
+from typing import Any, Dict
+
+from fastapi import APIRouter, Depends
 
 from backend.api.response_models import ApiResponse, ConnectionPoolStatusResponse
 from backend.auth.dependencies import get_current_user_async as get_current_user
@@ -20,15 +21,15 @@ async def get_connection_pool_status(current_user: dict = Depends(get_current_us
     """
     try:
         from backend.server import connection_pool
-        
+
         if not connection_pool:
             return ApiResponse.error_response(
                 error_code="POOL_NOT_INITIALIZED",
                 error_message="Connection pool is not initialized",
             )
-        
+
         pool_health = connection_pool.check_health()
-        
+
         status_response = ConnectionPoolStatusResponse(
             status=pool_health.get("status", "unknown"),
             pool_size=pool_health.get("pool_size", 0),
@@ -39,12 +40,12 @@ async def get_connection_pool_status(current_user: dict = Depends(get_current_us
             metrics=pool_health.get("metrics", {}),
             health_check=pool_health.get("connection_test"),
         )
-        
+
         return ApiResponse.success_response(
             data=status_response,
             message="Connection pool status retrieved successfully",
         )
-        
+
     except Exception as e:
         return ApiResponse.error_response(
             error_code="POOL_STATUS_ERROR",
@@ -60,20 +61,20 @@ async def get_connection_pool_stats(current_user: dict = Depends(get_current_use
     """
     try:
         from backend.server import connection_pool
-        
+
         if not connection_pool:
             return ApiResponse.error_response(
                 error_code="POOL_NOT_INITIALIZED",
                 error_message="Connection pool is not initialized",
             )
-        
+
         stats = connection_pool.get_stats()
-        
+
         return ApiResponse.success_response(
             data=stats,
             message="Connection pool statistics retrieved successfully",
         )
-        
+
     except Exception as e:
         return ApiResponse.error_response(
             error_code="POOL_STATS_ERROR",
@@ -89,23 +90,22 @@ async def trigger_health_check(current_user: dict = Depends(get_current_user)):
     """
     try:
         from backend.server import connection_pool
-        
+
         if not connection_pool:
             return ApiResponse.error_response(
                 error_code="POOL_NOT_INITIALIZED",
                 error_message="Connection pool is not initialized",
             )
-        
+
         health_result = connection_pool.check_health()
-        
+
         return ApiResponse.success_response(
             data=health_result,
             message="Health check completed",
         )
-        
+
     except Exception as e:
         return ApiResponse.error_response(
             error_code="HEALTH_CHECK_ERROR",
             error_message=f"Health check failed: {str(e)}",
         )
-

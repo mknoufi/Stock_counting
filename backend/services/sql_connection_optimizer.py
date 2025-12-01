@@ -4,11 +4,13 @@ Optimizes SQL Server connections for better performance
 """
 
 import logging
-import pyodbc
-from typing import Dict, Any, List
-from contextlib import contextmanager
 import time
+from contextlib import contextmanager
 from functools import wraps
+from typing import Any, Dict, List
+
+import pyodbc
+
 from ..utils.db_connection import ConnectionStringOptimizer
 
 logger = logging.getLogger(__name__)
@@ -58,9 +60,9 @@ class SQLConnectionOptimizer:
         self.connection_string = ConnectionStringOptimizer.optimize_existing_connection_string(
             self.connection_string,
             connect_timeout=self.connect_timeout,
-            command_timeout=self.command_timeout
+            command_timeout=self.command_timeout,
         )
-        
+
         logger.info("SQL connection string optimized using shared utility")
         return self.connection_string
 

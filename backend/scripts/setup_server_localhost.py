@@ -5,8 +5,8 @@ Setup for Running on Server Machine with localhost
 Updates .env for localhost connection (best practice)
 """
 
-import sys
 import io
+import sys
 
 if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")

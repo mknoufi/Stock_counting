@@ -3,10 +3,11 @@ Dynamic Fields Service
 Allows supervisors to dynamically add custom fields to items with database mapping
 """
 
-from typing import Dict, List, Optional, Any
-from datetime import datetime
-from bson import ObjectId
 import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from bson import ObjectId
 
 logger = logging.getLogger(__name__)
 

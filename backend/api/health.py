@@ -3,11 +3,12 @@ Health Check Endpoints
 Provides health, readiness, and liveness checks for monitoring and Kubernetes
 """
 
-from fastapi import APIRouter, status, HTTPException
-from typing import Dict, Any
-from datetime import datetime
 import logging
 import os
+from datetime import datetime
+from typing import Any, Dict
+
+from fastapi import APIRouter, HTTPException, status
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ def get_mongodb_status() -> Dict[str, Any]:
 
 
 async def _build_readiness_checks() -> Dict[str, Any]:
-    from server import database_health_service, connection_pool
+    from backend.server import connection_pool
 
     checks: Dict[str, Any] = {
         "mongodb": False,
@@ -63,6 +64,18 @@ async def _build_readiness_checks() -> Dict[str, Any]:
         "connection_pool": {"initialized": False},
         "timestamp": datetime.utcnow().isoformat(),
     }
+
+    # Run checks
+    await _check_mongodb_health(checks)
+    await _check_sql_server_health(checks)
+    _check_connection_pool_health(checks, connection_pool)
+    _check_system_resources_health(checks)
+
+    return checks
+
+
+async def _check_mongodb_health(checks: Dict[str, Any]) -> None:
+    from backend.server import database_health_service
 
     try:
         mongo_result = await database_health_service.check_mongo_health()
@@ -73,6 +86,10 @@ async def _build_readiness_checks() -> Dict[str, Any]:
         logger.error(f"MongoDB health check failed: {exc}")
         checks["mongodb_error"] = str(exc)
 
+
+async def _check_sql_server_health(checks: Dict[str, Any]) -> None:
+    from backend.server import database_health_service
+
     try:
         sql_result = await database_health_service.check_sql_server_health()
         checks["sql_server"] = sql_result.get("status") == "healthy"
@@ -82,6 +99,8 @@ async def _build_readiness_checks() -> Dict[str, Any]:
         logger.error(f"SQL Server health check failed: {exc}")
         checks["sql_server_error"] = str(exc)
 
+
+def _check_connection_pool_health(checks: Dict[str, Any], connection_pool: Any) -> None:
     if connection_pool is not None:
         try:
             pool_stats = connection_pool.get_stats()
@@ -96,11 +115,12 @@ async def _build_readiness_checks() -> Dict[str, Any]:
             logger.error(f"Connection pool health check failed: {exc}")
             checks["connection_pool"] = {"initialized": True, "error": str(exc)}
 
-    # Add system resource checks
+
+def _check_system_resources_health(checks: Dict[str, Any]) -> None:
     try:
         resources = _gather_system_resources()
         checks["system_resources"] = resources
-        
+
         # Check disk space
         if resources["disk"]["status"] == "critical":
             checks["disk_space"] = False
@@ -111,11 +131,9 @@ async def _build_readiness_checks() -> Dict[str, Any]:
         logger.warning(f"System resource check failed: {exc}")
         checks["system_resources_error"] = str(exc)
 
-    return checks
-
 
 async def _build_startup_checks() -> Dict[str, Any]:
-    from server import database_health_service
+    from backend.server import database_health_service
 
     checks: Dict[str, Any] = {
         "mongodb": False,
@@ -141,7 +159,7 @@ async def _build_startup_checks() -> Dict[str, Any]:
 
 def _build_mongo_pool_info() -> Dict[str, Any]:
     try:
-        from server import client
+        from backend.server import client
 
         pool_size = getattr(client, "_max_pool_size", "unknown")
         return {
@@ -153,8 +171,9 @@ def _build_mongo_pool_info() -> Dict[str, Any]:
 
 
 def _gather_system_resources() -> Dict[str, Any]:
-    import psutil
     import time
+
+    import psutil
 
     process = psutil.Process(os.getpid())
 
@@ -185,9 +204,7 @@ def _gather_system_resources() -> Dict[str, Any]:
             "total_gb": round(disk_total_gb, 2),
             "used_percent": round(disk_percent, 2),
             "status": (
-                "healthy"
-                if disk_percent < 90
-                else "warning" if disk_percent < 95 else "critical"
+                "healthy" if disk_percent < 90 else "warning" if disk_percent < 95 else "critical"
             ),
         },
     }
@@ -221,8 +238,9 @@ async def get_version() -> Dict[str, Any]:
     Usage: Version checking, debugging, monitoring
     """
     try:
-        from server import app
         from config import settings
+
+        from backend.server import app
 
         version_info = {
             "version": getattr(app, "version", getattr(settings, "APP_VERSION", "1.0.0")),
@@ -259,6 +277,7 @@ async def get_version() -> Dict[str, Any]:
         }
 
 
+@health_router.get("", status_code=status.HTTP_200_OK, include_in_schema=False)
 @health_router.get("/", status_code=status.HTTP_200_OK)
 async def health_check() -> Dict[str, Any]:
     """
@@ -267,7 +286,7 @@ async def health_check() -> Dict[str, Any]:
 
     Usage: Monitoring systems, load balancers
     """
-    from server import database_health_service
+    from backend.server import database_health_service
 
     mongo_result = await database_health_service.check_mongo_health()
     mongo_status = mongo_result.get("status", "unknown")
@@ -371,7 +390,7 @@ async def detailed_health_check() -> Dict[str, Any]:
 
     Usage: Monitoring dashboards, troubleshooting
     """
-    from server import database_health_service, connection_pool, app
+    from backend.server import app, connection_pool, database_health_service
 
     resources = _gather_system_resources()
     mongo_pool_info = _build_mongo_pool_info()

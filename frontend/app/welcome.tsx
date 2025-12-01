@@ -10,7 +10,8 @@ import Animated, {
   FadeInDown,
   FadeInUp
 } from 'react-native-reanimated';
-import { colors, spacing, typography, borderRadius, gradients, glassStyle } from '../styles/globalStyles';
+import { colors, spacing, gradients } from '../styles/globalStyles';
+import { useAuthStore } from '../store/authStore';
 
 
 const FeatureCard = ({ icon, title, delay }: { icon: keyof typeof Ionicons.glyphMap; title: string; delay: number }) => (
@@ -29,6 +30,21 @@ const FeatureCard = ({ icon, title, delay }: { icon: keyof typeof Ionicons.glyph
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { user, isLoading } = useAuthStore();
+
+  // Redirect if user is already logged in
+  React.useEffect(() => {
+    if (!isLoading && user) {
+      console.log('🔄 [WELCOME] User already logged in, redirecting:', { role: user.role });
+      if (Platform.OS === 'web' && (user.role === 'supervisor' || user.role === 'admin')) {
+        router.replace('/admin/metrics');
+      } else if (user.role === 'supervisor' || user.role === 'admin') {
+        router.replace('/supervisor/dashboard');
+      } else {
+        router.replace('/staff/home');
+      }
+    }
+  }, [user, isLoading, router]);
 
   const handlePress = (route: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

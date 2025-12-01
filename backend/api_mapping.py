@@ -3,15 +3,16 @@ API endpoints for database mapping configuration
 Allows users to discover and configure table/column mappings
 """
 
-from fastapi import APIRouter, HTTPException
-from typing import Dict, Any, Optional
-from pydantic import BaseModel
 import logging
+from typing import Any, Dict, Optional
+
 import pyodbc
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/mapping", tags=["mapping"])
+router = APIRouter(tags=["mapping"])
 
 
 class ColumnMapping(BaseModel):
@@ -179,13 +180,17 @@ async def get_table_columns(
             conn.close()
 
 
+print("DEBUG: Importing api_mapping module")
+
+
 @router.get("/current")
 async def get_current_mapping():
     """
     Get current mapping configuration
     """
+    print("DEBUG: Accessing get_current_mapping endpoint")
     try:
-        from db_mapping_config import get_active_mapping
+        from backend.db_mapping_config import get_active_mapping
 
         mapping = get_active_mapping()
 

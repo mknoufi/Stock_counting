@@ -1,22 +1,24 @@
 """
-ERP Sync Service - Sync ERP data to MongoDB at regular intervals
-Handles scheduled synchronization from SQL Server to MongoDB
+SQL Server Sync Service - Sync quantity changes from SQL Server to MongoDB
+CRITICAL: Only syncs quantity changes, preserves all enrichment data
 """
 
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from backend.sql_server_connector import SQLServerConnector
+from backend.exceptions import SQLServerConnectionError, SyncError
 
 logger = logging.getLogger(__name__)
 
 
-class ERPSyncService:
+class SQLSyncService:
     """
-    Service to sync ERP data (SQL Server) to MongoDB at regular intervals
-    Keeps app database updated with latest ERP data
+    Service to sync SQL Server quantity changes to MongoDB
+    CRITICAL: Preserves enrichment data (serial#, MRP, HSN, etc.)
+    Only updates: sql_server_qty, last_synced, sql_modified
     """
 
     def __init__(
@@ -33,7 +35,7 @@ class ERPSyncService:
         self._running = False
         self._task: Optional[asyncio.Task] = None
         self._last_sync: Optional[datetime] = None
-        self._sync_stats = {
+        self._sync_stats: Dict[str, Any] = {
             "total_syncs": 0,
             "successful_syncs": 0,
             "failed_syncs": 0,
@@ -43,112 +45,174 @@ class ERPSyncService:
 
     async def sync_items(self) -> Dict[str, Any]:
         """
-        Sync items from ERP (SQL Server) to MongoDB
+        Sync ONLY quantity changes from SQL Server to MongoDB
+        CRITICAL: Preserves all enrichment data (serial#, MRP, HSN, location, etc.)
+
         Returns sync statistics
         """
         if not self.sql_connector.test_connection():
-            raise Exception("SQL Server connection not available")
+            raise SQLServerConnectionError("SQL Server connection not available")
 
         start_time = datetime.utcnow()
-        stats = {
-            "items_synced": 0,
+        stats: Dict[str, Any] = {
+            "items_checked": 0,
             "items_updated": 0,
+            "items_unchanged": 0,
             "items_created": 0,
             "errors": 0,
-            "duration": 0,
+            "duration": 0.0,
         }
 
         try:
             # Fetch all items from SQL Server
-            logger.info("Starting ERP sync...")
-            items = self.sql_connector.get_all_items()
+            logger.info("Starting SQL Server qty sync...")
+            sql_items = self.sql_connector.get_all_items()
 
-            # Batch process items
+            # Batch process items with parallel execution for better performance
             batch_size = 100
-            for i in range(0, len(items), batch_size):
-                batch = items[i : i + batch_size]
+            max_concurrent_batches = 5  # Process up to 5 batches in parallel
 
-                for item in batch:
-                    try:
-                        # Prepare item document
-                        item_doc = {
-                            "item_code": item.get("item_code", ""),
-                            "item_name": item.get("item_name", ""),
-                            "barcode": item.get("barcode", ""),
-                            "stock_qty": float(item.get("stock_qty", 0.0)),
-                            "mrp": float(item.get("mrp", 0.0)),
-                            "category": item.get("category", "General"),
-                            "subcategory": item.get("subcategory", ""),
-                            "warehouse": item.get("warehouse", "Main"),
-                            "uom_code": item.get("uom_code", ""),
-                            "uom_name": item.get("uom_name", ""),
-                            "floor": item.get("floor", ""),
-                            "rack": item.get("rack", ""),
-                            "synced_at": datetime.utcnow(),
-                            "synced_from_erp": True,
-                            "data_version": 3,
-                        }
+            # Create batches
+            batches = [
+                sql_items[i : i + batch_size]
+                for i in range(0, len(sql_items), batch_size)
+            ]
 
-                        # Update or insert item, preserve verification metadata
-                        result = await self.mongo_db.erp_items.update_one(
-                            {"item_code": item_doc["item_code"]},
-                            {
-                                "$set": item_doc,
-                                "$setOnInsert": {
-                                    "created_at": datetime.utcnow(),
-                                    "verified": False,
-                                    "verified_by": None,
-                                    "verified_at": None,
-                                    "last_scanned_at": None,
-                                },
-                            },
-                            upsert=True,
-                        )
+            # Process batches with controlled concurrency
+            semaphore = asyncio.Semaphore(max_concurrent_batches)
 
-                        if result.upserted_id:
-                            stats["items_created"] += 1
-                        else:
-                            stats["items_updated"] += 1
+            async def process_batch_with_semaphore(batch: list) -> None:
+                async with semaphore:
+                    await self._process_batch(batch, stats)
 
-                        stats["items_synced"] += 1
+            # Process all batches concurrently
+            await asyncio.gather(*[process_batch_with_semaphore(batch) for batch in batches])
 
-                    except Exception as e:
-                        logger.error(f"Error syncing item {item.get('item_code')}: {str(e)}")
-                        stats["errors"] += 1
-
-            stats["duration"] = (datetime.utcnow() - start_time).total_seconds()
-            self._last_sync = datetime.utcnow()
-            self._sync_stats["successful_syncs"] += 1
-            self._sync_stats["items_synced"] = stats["items_synced"]
-            self._sync_stats["last_sync"] = self._last_sync.isoformat()
+            # Update sync statistics
+            self._update_sync_stats(stats, start_time)
 
             logger.info(
-                f"ERP sync completed: {stats['items_synced']} items "
-                f"({stats['items_created']} created, {stats['items_updated']} updated) "
-                f"in {stats['duration']:.2f}s"
-            )
-
-            # Update sync metadata
-            await self.mongo_db.erp_sync_metadata.update_one(
-                {"_id": "sync_stats"},
-                {
-                    "$set": {
-                        "last_sync": self._last_sync,
-                        "stats": stats,
-                        "updated_at": datetime.utcnow(),
-                    },
-                    "$inc": {"total_syncs": 1},
-                },
-                upsert=True,
+                f"SQL Server sync completed: {stats['items_checked']} checked, "
+                f"{stats['items_updated']} updated, {stats['items_created']} created, "
+                f"{stats['errors']} errors in {stats['duration']:.2f}s"
             )
 
             return stats
 
-        except Exception as e:
-            logger.error(f"ERP sync failed: {str(e)}")
-            self._sync_stats["failed_syncs"] += 1
-            stats["errors"] = 1
+        except SQLServerConnectionError:
             raise
+        except Exception as e:
+            self._sync_stats["failed_syncs"] = int(self._sync_stats.get("failed_syncs", 0)) + 1
+            logger.error(f"Sync failed: {str(e)}")
+            raise SyncError(
+                message=f"Sync operation failed: {str(e)}",
+                sync_type="quantity_sync",
+                details={"error_type": type(e).__name__},
+            ) from e
+
+    async def _process_batch(self, batch: List[Dict[str, Any]], stats: Dict[str, Any]) -> None:
+        """Process a batch of items"""
+        for sql_item in batch:
+            try:
+                await self._process_item(sql_item, stats)
+            except Exception as e:
+                item_code = sql_item.get("item_code", "unknown")
+                logger.error(f"Error syncing item {item_code}: {str(e)}", exc_info=True)
+                stats["errors"] += 1
+
+    async def _process_item(self, sql_item: Dict[str, Any], stats: Dict[str, Any]) -> None:
+        """Process a single item"""
+        item_code = sql_item.get("item_code", "")
+        if not item_code:
+            stats["errors"] += 1
+            return
+
+        # Get current MongoDB item
+        existing_item = await self.mongo_db.erp_items.find_one({"item_code": item_code})
+        sql_qty = float(sql_item.get("stock_qty", 0.0))
+        stats["items_checked"] += 1
+
+        if existing_item:
+            await self._update_existing_item(item_code, existing_item, sql_qty, stats)
+        else:
+            await self._create_new_item(item_code, sql_item, sql_qty, stats)
+
+    async def _update_existing_item(
+        self, item_code: str, existing_item: Dict[str, Any], sql_qty: float, stats: Dict[str, Any]
+    ) -> None:
+        """Update existing item quantity, preserving enrichment data"""
+        old_qty = existing_item.get("sql_server_qty", existing_item.get("stock_qty", 0.0))
+
+        # Only update if qty changed
+        if abs(sql_qty - old_qty) > 0.001:  # Handle float comparison
+            result = await self.mongo_db.erp_items.update_one(
+                {"item_code": item_code},
+                {
+                    "$set": {
+                        "sql_server_qty": sql_qty,
+                        "stock_qty": sql_qty,  # Keep both for compatibility
+                        "last_synced": datetime.utcnow(),
+                        "qty_changed": True,
+                        "qty_change_detected_at": datetime.utcnow(),
+                    }
+                },
+            )
+
+            if result.modified_count > 0:
+                stats["items_updated"] += 1
+                logger.debug(f"Updated qty for {item_code}: {old_qty} → {sql_qty}")
+        else:
+            stats["items_unchanged"] += 1
+
+    async def _create_new_item(
+        self, item_code: str, sql_item: Dict[str, Any], sql_qty: float, stats: Dict[str, Any]
+    ) -> None:
+        """Create new item with basic data"""
+        item_doc = {
+            "item_code": item_code,
+            "item_name": sql_item.get("item_name", ""),
+            "barcode": sql_item.get("barcode", ""),
+            "sql_server_qty": sql_qty,
+            "stock_qty": sql_qty,  # Keep for compatibility
+            "category": sql_item.get("category", "General"),
+            "subcategory": sql_item.get("subcategory", ""),
+            "warehouse": sql_item.get("warehouse", "Main"),
+            "uom_code": sql_item.get("uom_code", ""),
+            "uom_name": sql_item.get("uom_name", ""),
+            # Enrichment fields (empty/null initially)
+            "serial_number": None,
+            "mrp": sql_item.get("mrp", 0.0),  # Some may come from SQL
+            "hsn_code": None,
+            "location": None,
+            "condition": None,
+            # Metadata
+            "synced_at": datetime.utcnow(),
+            "last_synced": datetime.utcnow(),
+            "synced_from_sql": True,
+            "created_at": datetime.utcnow(),
+            # Enrichment tracking
+            "data_complete": False,
+            "completion_percentage": 0.0,
+            "enrichment_history": [],
+            # Verification tracking
+            "verified": False,
+            "verified_by": None,
+            "verified_at": None,
+            "verification_status": "pending",
+        }
+
+        await self.mongo_db.erp_items.insert_one(item_doc)
+        stats["items_created"] += 1
+        logger.debug(f"Created new item: {item_code}")
+
+    def _update_sync_stats(self, stats: Dict[str, Any], start_time: datetime) -> None:
+        """Update sync statistics"""
+        stats["duration"] = float((datetime.utcnow() - start_time).total_seconds())
+        self._last_sync = datetime.utcnow()
+        self._sync_stats["total_syncs"] = int(self._sync_stats.get("total_syncs", 0)) + 1
+        self._sync_stats["successful_syncs"] = int(self._sync_stats.get("successful_syncs", 0)) + 1
+        self._sync_stats["last_sync"] = self._last_sync.isoformat() if self._last_sync else None
+        self._sync_stats["items_synced"] = stats["items_checked"]
 
     async def sync_all_items(self) -> Dict[str, Any]:
         """
@@ -166,13 +230,13 @@ class ERPSyncService:
                     logger.warning(
                         "SQL Server connection not available, skipping sync. Will retry later."
                     )
-                    self._sync_stats["failed_syncs"] += 1
+                    self._sync_stats["failed_syncs"] = int(self._sync_stats.get("failed_syncs", 0)) + 1
                 else:
                     await self.sync_items()
-                    self._sync_stats["total_syncs"] += 1
+                    self._sync_stats["total_syncs"] = int(self._sync_stats.get("total_syncs", 0)) + 1
             except Exception as e:
                 logger.error(f"Sync loop error: {str(e)}")
-                self._sync_stats["failed_syncs"] += 1
+                self._sync_stats["failed_syncs"] = int(self._sync_stats.get("failed_syncs", 0)) + 1
 
             # Wait for next sync interval
             await asyncio.sleep(self.sync_interval)

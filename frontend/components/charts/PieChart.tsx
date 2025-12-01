@@ -4,8 +4,8 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import Svg, { G, Path, Circle, Text as SvgText } from 'react-native-svg';
+import { View, Text, StyleSheet } from 'react-native';
+import Svg, { G, Path, Text as SvgText } from 'react-native-svg';
 import { modernColors, modernTypography, modernSpacing } from '../../styles/modernDesignSystem';
 
 const CHART_SIZE = 200;
@@ -182,4 +182,3 @@ const styles = StyleSheet.create({
     color: modernColors.text.secondary,
   },
 });
-

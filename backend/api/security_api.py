@@ -3,10 +3,11 @@ Security Dashboard API
 Provides endpoints for security monitoring, failed login tracking, and audit logs
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from typing import Optional
-from datetime import datetime, timedelta
 import logging
+from datetime import datetime, timedelta
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from backend.auth.dependencies import get_current_user
 
@@ -32,7 +33,7 @@ async def get_failed_logins(
 ):
     """Get failed login attempts"""
     try:
-        from server import db
+        from backend.server import db
 
         # Build query
         query = {
@@ -106,7 +107,7 @@ async def get_suspicious_activity(
 ):
     """Get suspicious activity patterns"""
     try:
-        from server import db
+        from backend.server import db
 
         cutoff_time = datetime.utcnow() - timedelta(hours=hours)
 
@@ -179,7 +180,7 @@ async def get_security_sessions(
 ):
     """Get all active sessions for security monitoring"""
     try:
-        from server import db
+        from backend.server import db
 
         # Get refresh tokens (active sessions)
         query = {"revoked": False}
@@ -256,7 +257,7 @@ async def get_audit_log(
 ):
     """Get security audit log from activity logs"""
     try:
-        from server import db
+        from backend.server import db
 
         # Build query
         query = {"timestamp": {"$gte": datetime.utcnow() - timedelta(hours=hours)}}
@@ -321,7 +322,7 @@ async def get_ip_tracking(
 ):
     """Get IP address tracking data"""
     try:
-        from server import db
+        from backend.server import db
 
         cutoff_time = datetime.utcnow() - timedelta(hours=hours)
 
@@ -386,7 +387,7 @@ async def get_security_summary(
 ):
     """Get security summary dashboard data"""
     try:
-        from server import db
+        from backend.server import db
 
         cutoff_time = datetime.utcnow() - timedelta(hours=hours)
 

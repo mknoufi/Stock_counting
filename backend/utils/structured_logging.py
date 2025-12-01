@@ -3,12 +3,12 @@ Structured Logging (2024/2025 Best Practice)
 JSON-formatted logging for better observability
 """
 
-import logging
 import json
+import logging
 import sys
+import traceback
 from datetime import datetime
 from typing import Any, Dict, Optional
-import traceback
 
 
 class NonClosingStreamHandler(logging.StreamHandler):

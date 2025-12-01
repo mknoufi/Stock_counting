@@ -6,16 +6,18 @@ This script fetches data from SQL Server and updates MongoDB items
 import asyncio
 import logging
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from motor.motor_asyncio import AsyncIOMotorClient
-from backend.sql_server_connector import SQLServerConnector
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
+from motor.motor_asyncio import AsyncIOMotorClient
+
+from backend.sql_server_connector import SQLServerConnector
 
 # Load environment variables
 load_dotenv()
@@ -160,4 +162,3 @@ async def backfill_new_fields():
 
 if __name__ == "__main__":
     asyncio.run(backfill_new_fields())
-

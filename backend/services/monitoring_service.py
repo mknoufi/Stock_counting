@@ -4,11 +4,11 @@ Tracks performance, errors, and system health
 Provides Prometheus-compatible metrics
 """
 
+import logging
 import threading
-from typing import Dict, Any, Optional
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
-import logging
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 

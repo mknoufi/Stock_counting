@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional, Callable
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from backend.sql_server_connector import SQLServerConnector
-from backend.services.erp_sync_service import ERPSyncService
+from backend.services.erp_sync_service import SQLSyncService
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class AutoSyncManager:
         # State tracking
         self._running = False
         self._monitoring_task: Optional[asyncio.Task] = None
-        self._sync_service: Optional[ERPSyncService] = None
+        self._sync_service: Optional[SQLSyncService] = None
         self._last_connection_check: Optional[datetime] = None
         self._last_sync_attempt: Optional[datetime] = None
         self._sql_available = False
@@ -198,7 +198,7 @@ class AutoSyncManager:
 
             # Initialize sync service if needed
             if not self._sync_service:
-                self._sync_service = ERPSyncService(
+                self._sync_service = SQLSyncService(
                     sql_connector=self.sql_connector,
                     mongo_db=self.mongo_db,
                     sync_interval=self.sync_interval,

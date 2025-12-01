@@ -114,7 +114,7 @@ export const SimpleBarChart: React.FC<SimpleBarChartProps> = ({
           {data.map((item, index) => {
             const barHeight = item.value * scale;
             const x = index * (barWidth + BAR_SPACING);
-            const y = chartHeight - barHeight;
+
             const color = item.color || modernColors.primary[500];
 
             return (
@@ -250,4 +250,3 @@ const styles = StyleSheet.create({
     color: modernColors.text.secondary,
   },
 });
-

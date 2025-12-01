@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { storage } from './asyncStorageService';
+import { levenshteinDistance } from '../utils/algorithms';
 
 const STORAGE_KEYS = {
   ITEMS_CACHE: 'items_cache',
@@ -95,12 +96,27 @@ export const searchItemsInCache = async (query: string): Promise<CachedItem[]> =
     const items = Object.values(cache);
 
     const lowerQuery = query.toLowerCase();
-    return items.filter(
-      (item) =>
-        item.item_code.toLowerCase().includes(lowerQuery) ||
-        item.item_name.toLowerCase().includes(lowerQuery) ||
-        item.barcode.toLowerCase().includes(lowerQuery)
-    );
+    
+    return items.filter((item) => {
+      const code = item.item_code.toLowerCase();
+      const name = item.item_name.toLowerCase();
+      const barcode = item.barcode.toLowerCase();
+
+      // Direct includes check (fast path)
+      if (code.includes(lowerQuery) || name.includes(lowerQuery) || barcode.includes(lowerQuery)) {
+        return true;
+      }
+
+      // Levenshtein distance check (slower path for typos)
+      // Only check if query is long enough to matter
+      if (lowerQuery.length > 3) {
+         const distName = levenshteinDistance(name, lowerQuery);
+         // Allow 2 edits for name
+         if (distName <= 2) return true;
+      }
+      
+      return false;
+    });
   } catch (error) {
     console.error('Error searching items in cache:', error);
     return [];

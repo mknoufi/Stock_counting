@@ -1,6 +1,6 @@
 /**
  * SearchAutocomplete Component Stories
- * 
+ *
  * Documentation and examples for the SearchAutocomplete component
  */
 
@@ -44,11 +44,7 @@ export default meta;
 type Story = StoryObj<typeof SearchAutocomplete>;
 
 // Mock search results for stories
-const mockSearchResults = [
-  { item_code: 'ITEM001', item_name: 'Product A', barcode: '1234567890123' },
-  { item_code: 'ITEM002', item_name: 'Product B', barcode: '1234567890124' },
-  { item_code: 'ITEM003', item_name: 'Product C', barcode: '1234567890125' },
-];
+
 
 // Wrapper component for interactive stories
 const SearchWrapper = (args: any) => {
@@ -138,4 +134,3 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
 });
-

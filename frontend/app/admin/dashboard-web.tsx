@@ -1,6 +1,6 @@
 /**
  * Admin Web Dashboard - Comprehensive Monitoring, Reporting & Analytics
- * 
+ *
  * Features:
  * - Real-time system monitoring
  * - Report generation and management
@@ -26,7 +26,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { usePermissions } from '../../hooks/usePermissions';
 import { ModernCard } from '../../components/ModernCard';
@@ -49,8 +48,9 @@ import {
   getSystemHealthScore,
   getSessions,
   getSessionsAnalytics,
-  getSyncStatus,
   getSyncStats,
+  getVarianceTrend,
+  getStaffPerformance,
 } from '../../services/api';
 import { SimpleLineChart as LineChart } from '../../components/charts/SimpleLineChart';
 import { SimpleBarChart as BarChart } from '../../components/charts/SimpleBarChart';
@@ -104,22 +104,12 @@ export default function AdminDashboardWeb() {
   const [sessionsData, setSessionsData] = useState<any[]>([]);
   const [sessionsAnalytics, setSessionsAnalytics] = useState<any>(null);
   const [syncStats, setSyncStats] = useState<any>(null);
+  const [varianceTrend, setVarianceTrend] = useState<any[]>([]);
+  const [staffPerformance, setStaffPerformance] = useState<any[]>([]);
   const [analyticsDateRange, setAnalyticsDateRange] = useState({
     start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
     end: new Date(),
   });
-
-  useEffect(() => {
-    if (!hasRole('admin')) {
-      router.replace('/admin/control-panel');
-      return;
-    }
-    loadDashboardData();
-
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(loadDashboardData, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   const loadDashboardData = useCallback(async (isRefresh = false) => {
     try {
@@ -140,6 +130,8 @@ export default function AdminDashboardWeb() {
         sessionsRes,
         analyticsRes,
         syncStatsRes,
+        varianceTrendRes,
+        staffPerformanceRes,
       ] = await Promise.allSettled([
         getServicesStatus().catch(() => ({ data: null })),
         getSystemStats().catch(() => ({ data: null })),
@@ -151,6 +143,8 @@ export default function AdminDashboardWeb() {
         getSessions(1, 100).catch(() => ({ data: { sessions: [] } })),
         getSessionsAnalytics().catch(() => ({ data: null })),
         getSyncStats().catch(() => ({ success: false, data: null })),
+        getVarianceTrend().catch(() => ({ data: [] })),
+        getStaffPerformance().catch(() => ({ data: [] })),
       ]);
 
       if (servicesRes.status === 'fulfilled' && servicesRes.value?.data) {
@@ -174,7 +168,7 @@ export default function AdminDashboardWeb() {
       if (healthScoreRes.status === 'fulfilled' && healthScoreRes.value?.data) {
         setHealthScore(healthScoreRes.value.data.score);
       }
-      if (sessionsRes.status === 'fulfilled' && sessionsRes.value?.data) {
+      if (sessionsRes.status === 'fulfilled' && sessionsRes.value && 'data' in sessionsRes.value && sessionsRes.value.data) {
         setSessionsData(sessionsRes.value.data.sessions || []);
       }
       if (analyticsRes.status === 'fulfilled' && analyticsRes.value?.data) {
@@ -182,6 +176,12 @@ export default function AdminDashboardWeb() {
       }
       if (syncStatsRes.status === 'fulfilled' && syncStatsRes.value?.success && syncStatsRes.value?.data) {
         setSyncStats(syncStatsRes.value.data);
+      }
+      if (varianceTrendRes.status === 'fulfilled' && varianceTrendRes.value?.data) {
+        setVarianceTrend(varianceTrendRes.value.data);
+      }
+      if (staffPerformanceRes.status === 'fulfilled' && staffPerformanceRes.value?.data) {
+        setStaffPerformance(staffPerformanceRes.value.data);
       }
 
       setLastUpdate(new Date());
@@ -192,6 +192,18 @@ export default function AdminDashboardWeb() {
       setRefreshing(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!hasRole('admin')) {
+      router.replace('/admin/control-panel');
+      return;
+    }
+    loadDashboardData();
+
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(loadDashboardData, 30000);
+    return () => clearInterval(interval);
+  }, [hasRole, loadDashboardData, router]);
 
   const handleGenerateReport = async (reportId: string) => {
     try {
@@ -222,7 +234,7 @@ export default function AdminDashboardWeb() {
   // Prepare analytics data for charts
   const prepareSessionChartData = () => {
     if (!sessionsData || sessionsData.length === 0) return [];
-    
+
     // Group sessions by date
     const sessionsByDate: Record<string, number> = {};
     sessionsData.forEach((session: any) => {
@@ -241,7 +253,7 @@ export default function AdminDashboardWeb() {
 
   const prepareStatusChartData = () => {
     if (!sessionsData || sessionsData.length === 0) return [];
-    
+
     const statusCounts: Record<string, number> = {};
     sessionsData.forEach((session: any) => {
       const status = session.status || 'unknown';
@@ -265,7 +277,7 @@ export default function AdminDashboardWeb() {
 
   const prepareUserActivityData = () => {
     if (!sessionsData || sessionsData.length === 0) return [];
-    
+
     const userActivity: Record<string, number> = {};
     sessionsData.forEach((session: any) => {
       const user = session.created_by?.username || session.created_by || 'Unknown';
@@ -279,6 +291,23 @@ export default function AdminDashboardWeb() {
         label: label.length > 15 ? label.substring(0, 15) + '...' : label,
         value: value as number,
       }));
+  };
+
+  const prepareVarianceTrendData = () => {
+    if (!varianceTrend || varianceTrend.length === 0) return [];
+    return varianceTrend.map((item: any) => ({
+      x: item.date,
+      y: item.count,
+      label: item.date,
+    }));
+  };
+
+  const prepareStaffPerformanceData = () => {
+    if (!staffPerformance || staffPerformance.length === 0) return [];
+    return staffPerformance.map((item: any) => ({
+      label: item.username,
+      value: item.sessions_count,
+    }));
   };
 
   // Calculate metrics for overview cards
@@ -323,7 +352,7 @@ export default function AdminDashboardWeb() {
     const overviewMetrics = getOverviewMetrics();
 
     return (
-      <View style={styles.tabContent}>
+      <View style={styles.tabContent as any}>
         {/* Health Score Banner */}
         {healthScore !== null && (
           <ModernCard
@@ -332,15 +361,15 @@ export default function AdminDashboardWeb() {
               healthScore > 80
                 ? modernColors.gradients.success
                 : healthScore > 60
-                ? modernColors.gradients.warning
-                : modernColors.gradients.error
+                  ? modernColors.gradients.warning
+                  : modernColors.gradients.error
             }
-            style={styles.healthBanner}
+            style={styles.healthBanner as any}
           >
-            <View style={styles.healthBannerContent}>
+            <View style={styles.healthBannerContent as any}>
               <View>
-                <Text style={styles.healthBannerTitle}>System Health Score</Text>
-                <Text style={styles.healthBannerValue}>{healthScore}%</Text>
+                <Text style={styles.healthBannerTitle as any}>System Health Score</Text>
+                <Text style={styles.healthBannerValue as any}>{healthScore}%</Text>
               </View>
               <Ionicons
                 name={healthScore > 80 ? 'checkmark-circle' : 'warning'}
@@ -378,8 +407,8 @@ export default function AdminDashboardWeb() {
                           metric.trend === 'up'
                             ? modernColors.success.light
                             : metric.trend === 'down'
-                            ? modernColors.error.light
-                            : modernColors.neutral[200],
+                              ? modernColors.error.light
+                              : modernColors.neutral[200],
                       },
                     ]}
                   >
@@ -447,16 +476,16 @@ export default function AdminDashboardWeb() {
                       issue.severity === 'high'
                         ? 'alert-circle'
                         : issue.severity === 'medium'
-                        ? 'warning'
-                        : 'information-circle'
+                          ? 'warning'
+                          : 'information-circle'
                     }
                     size={20}
                     color={
                       issue.severity === 'high'
                         ? modernColors.error.main
                         : issue.severity === 'medium'
-                        ? modernColors.warning.main
-                        : modernColors.info.main
+                          ? modernColors.warning.main
+                          : modernColors.info.main
                     }
                   />
                   <View style={styles.issueContent}>
@@ -559,8 +588,8 @@ export default function AdminDashboardWeb() {
                           health.database > 80
                             ? modernColors.success.main
                             : health.database > 60
-                            ? modernColors.warning.main
-                            : modernColors.error.main,
+                              ? modernColors.warning.main
+                              : modernColors.error.main,
                       },
                     ]}
                   />
@@ -579,8 +608,8 @@ export default function AdminDashboardWeb() {
                           health.api > 80
                             ? modernColors.success.main
                             : health.api > 60
-                            ? modernColors.warning.main
-                            : modernColors.error.main,
+                              ? modernColors.warning.main
+                              : modernColors.error.main,
                       },
                     ]}
                   />
@@ -796,6 +825,8 @@ export default function AdminDashboardWeb() {
     const sessionChartData = prepareSessionChartData();
     const statusChartData = prepareStatusChartData();
     const userActivityData = prepareUserActivityData();
+    const varianceTrendData = prepareVarianceTrendData();
+    const staffPerformanceData = prepareStaffPerformanceData();
 
     return (
       <View style={styles.tabContent}>
@@ -901,6 +932,53 @@ export default function AdminDashboardWeb() {
           </ModernCard>
         </View>
 
+        {/* Advanced Analytics Row */}
+        <View style={styles.chartsRow}>
+          {/* Variance Trend Chart */}
+          <ModernCard
+            variant="elevated"
+            title="Variance Trend"
+            icon="trending-up"
+            style={styles.chartCard}
+          >
+            {varianceTrendData.length > 0 ? (
+              <LineChart
+                data={varianceTrendData}
+                color={modernColors.error.main}
+                showGrid
+                showPoints
+                title="Daily Variance Count"
+                yAxisLabel="Variances"
+                xAxisLabel="Date"
+              />
+            ) : (
+              <View style={styles.emptyChart}>
+                <Text style={styles.emptyChartText}>No variance data available</Text>
+              </View>
+            )}
+          </ModernCard>
+
+          {/* Staff Performance Chart */}
+          <ModernCard
+            variant="elevated"
+            title="Staff Performance"
+            icon="people"
+            style={styles.chartCard}
+          >
+            {staffPerformanceData.length > 0 ? (
+              <BarChart
+                data={staffPerformanceData}
+                showValues
+                title="Sessions per Staff"
+              />
+            ) : (
+              <View style={styles.emptyChart}>
+                <Text style={styles.emptyChartText}>No staff performance data</Text>
+              </View>
+            )}
+          </ModernCard>
+        </View>
+
         {/* Analytics Summary */}
         {sessionsAnalytics && (
           <ModernCard variant="elevated" title="Analytics Summary" icon="stats-chart">
@@ -965,8 +1043,8 @@ export default function AdminDashboardWeb() {
                         syncStats.status === 'success'
                           ? modernColors.success.main
                           : syncStats.status === 'error'
-                          ? modernColors.error.main
-                          : modernColors.warning.main,
+                            ? modernColors.error.main
+                            : modernColors.warning.main,
                     },
                   ]}
                 >
@@ -1212,7 +1290,7 @@ const styles = StyleSheet.create({
     marginBottom: modernSpacing.lg,
   },
   metricCard: {
-    flex: isWeb && isTablet ? '0 0 calc(25% - 12px)' : isWeb ? '0 0 calc(50% - 12px)' : '0 0 100%',
+    flex: (isWeb && isTablet ? '0 0 calc(25% - 12px)' : isWeb ? '0 0 calc(50% - 12px)' : '0 0 100%') as any,
     minWidth: 200,
   },
   metricHeader: {
@@ -1293,7 +1371,7 @@ const styles = StyleSheet.create({
     gap: modernSpacing.md,
   },
   serviceCard: {
-    flex: isWeb && isTablet ? '0 0 calc(25% - 12px)' : isWeb ? '0 0 calc(50% - 12px)' : '0 0 100%',
+    flex: (isWeb && isTablet ? '0 0 calc(25% - 12px)' : isWeb ? '0 0 calc(50% - 12px)' : '0 0 100%') as any,
     padding: modernSpacing.md,
     backgroundColor: modernColors.background.elevated,
     borderRadius: modernBorderRadius.md,
@@ -1331,7 +1409,7 @@ const styles = StyleSheet.create({
     gap: modernSpacing.lg,
   },
   statItem: {
-    flex: isWeb ? '0 0 calc(25% - 18px)' : '0 0 calc(50% - 12px)',
+    flex: (isWeb ? '0 0 calc(25% - 18px)' : '0 0 calc(50% - 12px)') as any,
   },
   statLabel: {
     ...modernTypography.body.small,
@@ -1383,7 +1461,7 @@ const styles = StyleSheet.create({
     gap: modernSpacing.md,
   },
   reportCard: {
-    flex: isWeb && isTablet ? '0 0 calc(33.333% - 16px)' : isWeb ? '0 0 calc(50% - 12px)' : '0 0 100%',
+    flex: (isWeb && isTablet ? '0 0 calc(33.333% - 16px)' : isWeb ? '0 0 calc(50% - 12px)' : '0 0 100%') as any,
     minWidth: 300,
   },
   reportActions: {
@@ -1471,7 +1549,7 @@ const styles = StyleSheet.create({
     marginBottom: modernSpacing.lg,
   },
   chartCard: {
-    flex: isWeb && isTablet ? '0 0 calc(50% - 12px)' : '0 0 100%',
+    flex: (isWeb && isTablet ? '0 0 calc(50% - 12px)' : '0 0 100%') as any,
     minWidth: 300,
   },
   emptyChart: {
@@ -1496,7 +1574,7 @@ const styles = StyleSheet.create({
     gap: modernSpacing.lg,
   },
   summaryItem: {
-    flex: isWeb ? '0 0 calc(25% - 18px)' : '0 0 calc(50% - 12px)',
+    flex: (isWeb ? '0 0 calc(25% - 18px)' : '0 0 calc(50% - 12px)') as any,
     padding: modernSpacing.md,
     backgroundColor: modernColors.background.elevated,
     borderRadius: modernBorderRadius.md,
@@ -1516,7 +1594,7 @@ const styles = StyleSheet.create({
     gap: modernSpacing.md,
   },
   syncStatItem: {
-    flex: isWeb ? '0 0 calc(33.333% - 12px)' : '0 0 100%',
+    flex: (isWeb ? '0 0 calc(33.333% - 12px)' : '0 0 100%') as any,
   },
   syncStatLabel: {
     ...modernTypography.body.small,
@@ -1547,7 +1625,7 @@ const styles = StyleSheet.create({
     gap: modernSpacing.md,
   },
   performanceItem: {
-    flex: isWeb && isTablet ? '0 0 calc(25% - 12px)' : isWeb ? '0 0 calc(50% - 12px)' : '0 0 100%',
+    flex: (isWeb && isTablet ? '0 0 calc(25% - 12px)' : isWeb ? '0 0 calc(50% - 12px)' : '0 0 100%') as any,
     alignItems: 'center',
     padding: modernSpacing.md,
     backgroundColor: modernColors.background.elevated,
@@ -1575,4 +1653,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-

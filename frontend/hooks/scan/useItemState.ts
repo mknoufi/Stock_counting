@@ -21,6 +21,7 @@ interface ItemState {
   selectedVariant: NormalizedMrpVariant | null;
   floorNo: string;
   rackNo: string;
+  shelfNo: string;
   damageQty: string;
   srNo: string;
   manufacturingDate: string;
@@ -45,6 +46,7 @@ const initialState: ItemState = {
   selectedVariant: null,
   floorNo: '',
   rackNo: '',
+  shelfNo: '',
   damageQty: '',
   srNo: '',
   manufacturingDate: '',
@@ -85,4 +87,3 @@ export const useItemState = () => {
     setCurrentItem,
   };
 };
-

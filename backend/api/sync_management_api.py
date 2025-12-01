@@ -4,6 +4,7 @@ Provides lightweight placeholder sync endpoints to keep tests and tooling stable
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+
 from backend.auth.dependencies import get_current_user_async as get_current_user
 
 sync_management_router = APIRouter(prefix="/sync", tags=["sync"])

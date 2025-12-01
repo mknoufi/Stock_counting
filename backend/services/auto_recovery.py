@@ -4,11 +4,11 @@ Automatically recovers from errors and provides fallback mechanisms
 """
 
 import logging
-from typing import Any, Callable, Dict, Optional, Tuple
-from functools import wraps
 import time
 import traceback
 from enum import Enum
+from functools import wraps
+from typing import Any, Callable, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +167,13 @@ def with_auto_recovery(
             )
 
             if not success:
-                raise Exception(error_msg or "Recovery failed")
+                from backend.exceptions import StockVerifyException
+
+                raise StockVerifyException(
+                    message=error_msg or "Recovery failed",
+                    error_code="RECOVERY_FAILED",
+                    details={"function": func.__name__},
+                )
 
             return result
 

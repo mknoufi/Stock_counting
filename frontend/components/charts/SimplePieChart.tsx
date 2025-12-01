@@ -4,8 +4,8 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text, StyleSheet, Platform } from 'react-native';
+
 import { modernColors, modernTypography, modernSpacing, modernBorderRadius } from '../../styles/modernDesignSystem';
 
 const CHART_SIZE = 200;
@@ -250,4 +250,3 @@ const styles = StyleSheet.create({
     color: modernColors.text.secondary,
   },
 });
-

@@ -2,10 +2,11 @@
 Test Stock Verification Feature
 """
 
-import pytest
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture
@@ -146,9 +147,7 @@ async def test_get_count_lines_with_verification_filter(mock_db, mock_current_us
     mock_db.count_lines.find = MagicMock(return_value=mock_cursor)
 
     # Test with verified=True filter
-    await get_count_lines(
-        "test-session-id", mock_current_user, page=1, page_size=50, verified=True
-    )
+    await get_count_lines("test-session-id", mock_current_user, page=1, page_size=50, verified=True)
 
     # Verify filter was applied
     find_call = mock_db.count_lines.find.call_args

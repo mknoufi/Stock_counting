@@ -5,7 +5,7 @@
 
 import api from './httpClient';
 import { retryWithBackoff } from '../utils/retry';
-import { ApiResponse, PaginatedResponse } from '../types/api';
+
 
 /**
  * Standardized API response type
@@ -79,7 +79,7 @@ class EnhancedApiClient {
   private handleError(error: any): StandardApiResponse<never> {
     if (error.response?.data) {
       const errorData = error.response.data;
-      
+
       // Check if it's already a standardized error response
       if (errorData.error) {
         return {
@@ -130,8 +130,7 @@ class EnhancedApiClient {
         async () => {
           return await api.get(`${this.baseURL}${endpoint}`, { params });
         },
-        retries,
-        'GET request'
+        { retries }
       );
 
       return this.handleResponse<T>(response.data);
@@ -153,8 +152,7 @@ class EnhancedApiClient {
         async () => {
           return await api.post(`${this.baseURL}${endpoint}`, data);
         },
-        retries,
-        'POST request'
+        { retries }
       );
 
       return this.handleResponse<T>(response.data);
@@ -176,8 +174,7 @@ class EnhancedApiClient {
         async () => {
           return await api.put(`${this.baseURL}${endpoint}`, data);
         },
-        retries,
-        'PUT request'
+        { retries }
       );
 
       return this.handleResponse<T>(response.data);
@@ -199,8 +196,7 @@ class EnhancedApiClient {
         async () => {
           return await api.patch(`${this.baseURL}${endpoint}`, data);
         },
-        retries,
-        'PATCH request'
+        { retries }
       );
 
       return this.handleResponse<T>(response.data);
@@ -221,8 +217,7 @@ class EnhancedApiClient {
         async () => {
           return await api.delete(`${this.baseURL}${endpoint}`);
         },
-        retries,
-        'DELETE request'
+        { retries }
       );
 
       return this.handleResponse<T>(response.data);
@@ -283,4 +278,3 @@ export const enhancedApiClient = new EnhancedApiClient('/api/v2');
 
 // Export class for custom instances
 export default EnhancedApiClient;
-

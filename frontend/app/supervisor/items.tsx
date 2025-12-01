@@ -11,17 +11,17 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Platform
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
-import { ItemVerificationAPI, FilteredItemsResponse } from '../../services/itemVerificationApi';
+import { ItemVerificationAPI } from '../../services/itemVerificationApi';
 import { ItemFilters, FilterValues } from '../../components/ItemFilters';
 import { exportItemsToCSV, downloadCSV } from '../../utils/csvExport';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { Platform } from 'react-native';
 
 const getLocalFileUri = (filename: string) => {
   const baseDir =
@@ -50,7 +50,7 @@ export default function ItemsScreen() {
     total_qty: 0,
   });
 
-  const loadItems = async (reset = false) => {
+  const loadItems = React.useCallback(async (reset = false) => {
     try {
       if (reset) {
         setLoading(true);
@@ -79,11 +79,11 @@ export default function ItemsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [filters, pagination.limit, pagination.skip]);
 
   useEffect(() => {
     loadItems(true);
-  }, [filters]);
+  }, [loadItems]);
 
   const handleRefresh = () => {
     setRefreshing(true);

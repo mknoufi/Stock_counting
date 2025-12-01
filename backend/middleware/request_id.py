@@ -3,10 +3,11 @@ Request ID Middleware (2024/2025 Best Practice)
 Adds unique request ID for tracing and debugging
 """
 
+import logging
 import uuid
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +34,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
         # Log request with ID (only for non-health endpoints to reduce noise)
         if not request.url.path.startswith("/health"):
-            logger.debug(
-                f"Request: {request.method} {request.url.path} " f"[Request-ID: {request_id}]"
-            )
+            logger.debug(f"Request: {request.method} {request.url.path} [Request-ID: {request_id}]")
 
         # Process request
         response = await call_next(request)

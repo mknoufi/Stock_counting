@@ -3,11 +3,11 @@ Rate Limiter Service - Prevent API abuse and handle concurrent requests
 Implements token bucket algorithm for rate limiting
 """
 
-import time
-import threading
-from typing import Dict, Optional, Any, Tuple
-from collections import defaultdict
 import logging
+import threading
+import time
+from collections import defaultdict
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 

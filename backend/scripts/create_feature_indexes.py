@@ -13,9 +13,10 @@ from pathlib import Path
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
+
 from dotenv import load_dotenv
+from motor.motor_asyncio import AsyncIOMotorClient
 
 # Load environment
 load_dotenv()

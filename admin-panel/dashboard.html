@@ -1,14 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>STOCK_VERIFY - Advanced Admin Dashboard</title>
     <link rel="stylesheet" href="enhanced-styles.css">
+    <link rel="stylesheet" href="terminal-styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/date-fns/2.29.3/date-fns.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
+
 <body>
     <div class="dashboard-container">
         <!-- Navigation Header -->
@@ -16,7 +20,7 @@
             <div class="header-brand">
                 <h1><i class="fas fa-tachometer-alt"></i> STOCK_VERIFY Advanced Dashboard</h1>
                 <span class="system-health" id="systemHealth">
-                    <i class="fas fa-heart"></i> 
+                    <i class="fas fa-heart"></i>
                     <span id="healthScore">--</span>%
                 </span>
             </div>
@@ -110,10 +114,12 @@
                             </span>
                         </div>
                         <div class="service-actions">
-                            <button class="btn-sm btn-success" onclick="startService('mongodb')" title="Start MongoDB Service" aria-label="Start MongoDB Service">
+                            <button class="btn-sm btn-success" onclick="startService('mongodb')"
+                                title="Start MongoDB Service" aria-label="Start MongoDB Service">
                                 <i class="fas fa-play"></i>
                             </button>
-                            <button class="btn-sm btn-danger" onclick="stopService('mongodb')" title="Stop MongoDB Service" aria-label="Stop MongoDB Service">
+                            <button class="btn-sm btn-danger" onclick="stopService('mongodb')"
+                                title="Stop MongoDB Service" aria-label="Stop MongoDB Service">
                                 <i class="fas fa-stop"></i>
                             </button>
                         </div>
@@ -131,10 +137,12 @@
                             </span>
                         </div>
                         <div class="service-actions">
-                            <button class="btn-sm btn-success" onclick="startService('backend')" title="Start Backend Service" aria-label="Start Backend Service">
+                            <button class="btn-sm btn-success" onclick="startService('backend')"
+                                title="Start Backend Service" aria-label="Start Backend Service">
                                 <i class="fas fa-play"></i>
                             </button>
-                            <button class="btn-sm btn-danger" onclick="stopService('backend')" title="Stop Backend Service" aria-label="Stop Backend Service">
+                            <button class="btn-sm btn-danger" onclick="stopService('backend')"
+                                title="Stop Backend Service" aria-label="Stop Backend Service">
                                 <i class="fas fa-stop"></i>
                             </button>
                         </div>
@@ -152,10 +160,12 @@
                             </span>
                         </div>
                         <div class="service-actions">
-                            <button class="btn-sm btn-success" onclick="startService('frontend')" title="Start Frontend Service" aria-label="Start Frontend Service">
+                            <button class="btn-sm btn-success" onclick="startService('frontend')"
+                                title="Start Frontend Service" aria-label="Start Frontend Service">
                                 <i class="fas fa-play"></i>
                             </button>
-                            <button class="btn-sm btn-danger" onclick="stopService('frontend')" title="Stop Frontend Service" aria-label="Stop Frontend Service">
+                            <button class="btn-sm btn-danger" onclick="stopService('frontend')"
+                                title="Stop Frontend Service" aria-label="Stop Frontend Service">
                                 <i class="fas fa-stop"></i>
                             </button>
                         </div>
@@ -173,10 +183,12 @@
                             </span>
                         </div>
                         <div class="service-actions">
-                            <button class="btn-sm btn-info" onclick="testSqlConnection()" title="Test SQL Connection" aria-label="Test SQL Server Connection">
+                            <button class="btn-sm btn-info" onclick="testSqlConnection()" title="Test SQL Connection"
+                                aria-label="Test SQL Server Connection">
                                 <i class="fas fa-plug"></i>
                             </button>
-                            <button class="btn-sm btn-warning" onclick="showSqlConfig()" title="Configure SQL Connection" aria-label="Configure SQL Server Connection">
+                            <button class="btn-sm btn-warning" onclick="showSqlConfig()"
+                                title="Configure SQL Connection" aria-label="Configure SQL Server Connection">
                                 <i class="fas fa-cog"></i>
                             </button>
                         </div>
@@ -234,18 +246,69 @@
                 </div>
             </section>
 
+            </section>
+
+            <!-- Connection Panel -->
+            <section class="connection-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-mobile-alt"></i> Mobile Connection</h2>
+                    <button class="btn-icon" onclick="refreshQrCodes()" title="Refresh QR Codes">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="qr-grid">
+                    <div class="qr-card">
+                        <h3>Expo Go (Dev)</h3>
+                        <div id="expoQr" class="qr-code"></div>
+                        <div class="qr-url" id="expoUrl">Loading...</div>
+                    </div>
+                    <div class="qr-card">
+                        <h3>Web App</h3>
+                        <div id="webQr" class="qr-code"></div>
+                        <div class="qr-url" id="webUrl">Loading...</div>
+                    </div>
+                    <div class="qr-card">
+                        <h3>Backend API</h3>
+                        <div id="apiQr" class="qr-code"></div>
+                        <div class="qr-url" id="apiUrl">Loading...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Terminal Panel -->
+            <section class="terminal-panel">
+                <div class="panel-header">
+                    <h2><i class="fas fa-terminal"></i> System Terminals</h2>
+                    <div class="terminal-controls">
+                        <div class="terminal-tabs">
+                            <button class="tab-btn active" onclick="switchTerminal('backend')">Backend</button>
+                            <button class="tab-btn" onclick="switchTerminal('frontend')">Frontend</button>
+                            <button class="tab-btn" onclick="switchTerminal('admin')">Admin</button>
+                        </div>
+                        <button class="btn-icon" onclick="toggleTerminalAutoScroll()" title="Toggle Auto-scroll">
+                            <i class="fas fa-arrow-down" id="termAutoScrollIcon"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="terminal-window" id="terminalWindow">
+                    <pre id="terminalContent">Loading logs...</pre>
+                </div>
+            </section>
+
             <!-- Real-time Logs -->
             <section class="logs-panel">
                 <div class="panel-header">
                     <h2><i class="fas fa-terminal"></i> Live System Logs</h2>
                     <div class="logs-controls">
-                        <select id="logServiceFilter" title="Filter logs by service" aria-label="Select service to filter logs">
+                        <select id="logServiceFilter" title="Filter logs by service"
+                            aria-label="Select service to filter logs">
                             <option value="all">All Services</option>
                             <option value="backend">Backend</option>
                             <option value="frontend">Frontend</option>
                             <option value="mongodb">MongoDB</option>
                         </select>
-                        <select id="logLevelFilter" title="Filter logs by level" aria-label="Select log level to filter">
+                        <select id="logLevelFilter" title="Filter logs by level"
+                            aria-label="Select log level to filter">
                             <option value="all">All Levels</option>
                             <option value="error">Errors Only</option>
                             <option value="warning">Warnings+</option>
@@ -309,7 +372,8 @@
             <div class="modal" id="configModal">
                 <div class="modal-header">
                     <h2>SQL Server Configuration</h2>
-                    <button class="modal-close" onclick="closeModals()" title="Close Configuration Modal" aria-label="Close Configuration Modal" type="button">
+                    <button class="modal-close" onclick="closeModals()" title="Close Configuration Modal"
+                        aria-label="Close Configuration Modal" type="button">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -346,11 +410,12 @@
                     </form>
                 </div>
             </div>
-        </div>
+    </div>
     </div>
 
     <script src="dashboard.js"></script>
     <script src="benchmark.js"></script>
     <script src="dashboard-fix-validator.js"></script>
 </body>
+
 </html>

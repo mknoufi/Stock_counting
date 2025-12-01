@@ -67,7 +67,7 @@ export const DatabaseSyncStatus: React.FC<{
   const handleTestConnection = async () => {
     setLoading(true);
     try {
-      const result = await testDatabaseConnection();
+      await testDatabaseConnection();
       // Refresh status after test
       await loadStatus();
     } catch (error) {

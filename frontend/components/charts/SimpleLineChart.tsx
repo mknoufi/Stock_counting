@@ -91,7 +91,7 @@ export const SimpleLineChart: React.FC<SimpleLineChartProps> = ({
         {/* Y-axis labels */}
         <View style={styles.yAxis}>
           {gridLines.map((line, i) => (
-            <View key={i} style={[styles.yAxisLabel, { top: line.y }]}>
+            <View key={i} style={[styles.yAxisLabelContainer, { top: line.y }]}>
               <Text style={styles.yAxisText}>{Math.round(line.value)}</Text>
             </View>
           ))}
@@ -141,6 +141,7 @@ export const SimpleLineChart: React.FC<SimpleLineChartProps> = ({
           {points.map((point, index) => {
             if (index === 0) return null;
             const prevPoint = points[index - 1];
+            if (!prevPoint) return null;
             const dx = point.x - prevPoint.x;
             const dy = point.y - prevPoint.y;
             const length = Math.sqrt(dx * dx + dy * dy);
@@ -222,7 +223,7 @@ const styles = StyleSheet.create({
     width: PADDING,
     position: 'relative',
   },
-  yAxisLabel: {
+  yAxisLabelContainer: {
     position: 'absolute',
     right: modernSpacing.xs,
     transform: [{ translateY: -8 }],
@@ -319,4 +320,3 @@ const styles = StyleSheet.create({
     color: modernColors.text.secondary,
   },
 });
-

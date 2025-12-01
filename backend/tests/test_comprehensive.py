@@ -3,11 +3,12 @@ Comprehensive Integration Tests
 Tests all implementations including stock verification, activity logs, error logs, help feature
 """
 
-import pytest
 import re
 from datetime import datetime
-from unittest.mock import AsyncMock, patch, MagicMock
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture
@@ -69,8 +70,8 @@ def mock_staff():
 @pytest.mark.asyncio
 async def test_stock_verification_workflow(mock_db, mock_supervisor):
     """Test complete stock verification workflow"""
+    from backend.server import get_count_lines, unverify_stock, verify_stock
     from backend.services.activity_log import ActivityLogService
-    from backend.server import verify_stock, get_count_lines, unverify_stock
 
     # Setup
     count_line = {
@@ -93,9 +94,10 @@ async def test_stock_verification_workflow(mock_db, mock_supervisor):
 
     activity_service = ActivityLogService(mock_db)
 
-    with patch("backend.server.activity_log_service", activity_service):
-        activity_service.log_activity = AsyncMock()
-
+    with (
+        patch("backend.server.activity_log_service", activity_service),
+        patch.object(activity_service, "log_activity", new_callable=AsyncMock),
+    ):
         # 1. Verify stock
         result = await verify_stock("line-1", mock_supervisor)
         assert result["verified"] is True
@@ -209,7 +211,7 @@ async def test_error_logging(mock_db, mock_supervisor):
 @pytest.mark.asyncio
 async def test_separation_of_sql_and_mongo(mock_db):
     """Test that SQL Server is read-only and MongoDB handles writes"""
-    from backend.services.erp_sync_service import ERPSyncService
+    from backend.services.erp_sync_service import SQLSyncService
 
     # Mock SQL connector (read-only)
     mock_sql_connector = MagicMock()
@@ -219,8 +221,12 @@ async def test_separation_of_sql_and_mongo(mock_db):
 
     # Mock MongoDB writes
     mock_db.erp_items.update_one = AsyncMock(return_value=MagicMock(modified_count=1))
+    # Mock MongoDB read to return a concrete item (avoids MagicMock/coroutine issues)
+    mock_db.erp_items.find_one = AsyncMock(
+        return_value={"item_code": "ITEM001", "sql_server_qty": 50.0, "stock_qty": 50.0}
+    )
 
-    service = ERPSyncService(
+    service = SQLSyncService(
         sql_connector=mock_sql_connector,
         mongo_db=mock_db,
         sync_interval=3600,
@@ -230,10 +236,10 @@ async def test_separation_of_sql_and_mongo(mock_db):
     # Trigger a sync cycle
     await service.sync_items()
 
-        # Verify SQL connector is called for reading
+    # Verify SQL connector is called for reading
     mock_sql_connector.get_all_items.assert_called_once()
 
-        # Verify MongoDB is used for writing
+    # Verify MongoDB is used for writing
     mock_db.erp_items.update_one.assert_called()
 
 
@@ -257,7 +263,7 @@ def test_no_sql_writes_in_codebase():
         if file_path.exists():
             try:
                 content = file_path.read_text(encoding="utf-8")
-            except:
+            except UnicodeDecodeError:
                 content = file_path.read_text(encoding="latin-1")
             for keyword in write_keywords:
                 # Check for execute statements with write keywords (excluding MongoDB operations)

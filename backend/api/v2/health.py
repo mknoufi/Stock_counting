@@ -14,18 +14,17 @@ router = APIRouter()
 
 
 @router.get("/", response_model=ApiResponse[HealthCheckResponse])
-async def health_check_v2():
+async def health_check_v2() -> ApiResponse[HealthCheckResponse]:
     """
     Enhanced health check endpoint
     Returns detailed health status of all services
     """
     try:
         # Import here to avoid circular dependencies
-        from backend.services.database_health import DatabaseHealthService
         from backend.server import database_health_service, connection_pool, cache_service
-        
+
         services: Dict[str, Dict[str, Any]] = {}
-        
+
         # Check MongoDB
         try:
             mongo_status = database_health_service.check_mongodb_health()
@@ -38,7 +37,7 @@ async def health_check_v2():
                 "status": "unhealthy",
                 "error": str(e),
             }
-        
+
         # Check SQL Server connection pool
         if connection_pool:
             try:
@@ -57,10 +56,14 @@ async def health_check_v2():
                 "status": "not_configured",
                 "message": "SQL Server connection pool not initialized",
             }
-        
+
         # Check cache service
         try:
-            cache_status = cache_service.get_status() if hasattr(cache_service, "get_status") else {"status": "unknown"}
+            cache_status = (
+                cache_service.get_status()
+                if hasattr(cache_service, "get_status")
+                else {"status": "unknown"}
+            )
             services["cache"] = {
                 "status": cache_status.get("status", "unknown"),
                 "details": cache_status,
@@ -70,25 +73,25 @@ async def health_check_v2():
                 "status": "unhealthy",
                 "error": str(e),
             }
-        
+
         # Determine overall status
         overall_status = "healthy"
         if any(s.get("status") == "unhealthy" for s in services.values()):
             overall_status = "unhealthy"
         elif any(s.get("status") == "degraded" for s in services.values()):
             overall_status = "degraded"
-        
+
         health_response = HealthCheckResponse(
             status=overall_status,
             services=services,
             version="2.0.0",
         )
-        
+
         return ApiResponse.success_response(
             data=health_response,
             message="Health check completed successfully",
         )
-        
+
     except Exception as e:
         return ApiResponse.error_response(
             error_code="HEALTH_CHECK_FAILED",
@@ -97,7 +100,9 @@ async def health_check_v2():
 
 
 @router.get("/detailed", response_model=ApiResponse[Dict[str, Any]])
-async def detailed_health_check(current_user: dict = Depends(get_current_user)):
+async def detailed_health_check(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> ApiResponse[Dict[str, Any]]:
     """
     Detailed health check (requires authentication)
     Returns comprehensive system status including metrics
@@ -109,20 +114,20 @@ async def detailed_health_check(current_user: dict = Depends(get_current_user)):
             cache_service,
             monitoring_service,
         )
-        
+
         health_data: Dict[str, Any] = {
             "timestamp": datetime.utcnow().isoformat(),
             "services": {},
             "metrics": {},
         }
-        
+
         # MongoDB health
         try:
             mongo_health = database_health_service.check_mongodb_health()
             health_data["services"]["mongodb"] = mongo_health
         except Exception as e:
             health_data["services"]["mongodb"] = {"error": str(e)}
-        
+
         # SQL Server pool health
         if connection_pool:
             try:
@@ -130,7 +135,7 @@ async def detailed_health_check(current_user: dict = Depends(get_current_user)):
                 health_data["services"]["sql_server_pool"] = pool_stats
             except Exception as e:
                 health_data["services"]["sql_server_pool"] = {"error": str(e)}
-        
+
         # Cache service
         try:
             if hasattr(cache_service, "get_status"):
@@ -138,7 +143,7 @@ async def detailed_health_check(current_user: dict = Depends(get_current_user)):
                 health_data["services"]["cache"] = cache_status
         except Exception as e:
             health_data["services"]["cache"] = {"error": str(e)}
-        
+
         # Monitoring metrics
         try:
             if hasattr(monitoring_service, "get_metrics"):
@@ -146,15 +151,14 @@ async def detailed_health_check(current_user: dict = Depends(get_current_user)):
                 health_data["metrics"] = metrics
         except Exception as e:
             health_data["metrics"] = {"error": str(e)}
-        
+
         return ApiResponse.success_response(
             data=health_data,
             message="Detailed health check completed",
         )
-        
+
     except Exception as e:
         return ApiResponse.error_response(
             error_code="DETAILED_HEALTH_CHECK_FAILED",
             error_message=f"Detailed health check failed: {str(e)}",
         )
-

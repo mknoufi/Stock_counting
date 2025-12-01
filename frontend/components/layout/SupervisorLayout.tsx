@@ -7,28 +7,26 @@ import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
-  Platform,
   Dimensions,
   ViewStyle,
   TouchableOpacity,
 } from 'react-native';
 import { useSegments } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+
 import { Screen } from './Screen';
 import { AppHeader } from '../navigation/AppHeader';
 import { SupervisorSidebar } from '../navigation/SupervisorSidebar';
-import { useTheme } from '../../hooks/useTheme';
-import { layout, spacing, breakpoints } from '../../styles/globalStyles';
+import { layout, breakpoints } from '../../styles/globalStyles';
 
 interface SupervisorLayoutProps {
   children: React.ReactNode;
   title?: string;
-  headerActions?: Array<{
+  headerActions?: {
     icon: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap;
     label: string;
     onPress: () => void;
     badge?: number;
-  }>;
+  }[];
   style?: ViewStyle;
   testID?: string;
 }
@@ -40,7 +38,7 @@ export const SupervisorLayout: React.FC<SupervisorLayoutProps> = ({
   style,
   testID,
 }) => {
-  const theme = useTheme();
+
   const rawSegments = useSegments();
   const segments = Array.isArray(rawSegments) ? rawSegments : [];
   const { width } = Dimensions.get('window');
@@ -54,10 +52,10 @@ export const SupervisorLayout: React.FC<SupervisorLayoutProps> = ({
     (segments[1] === 'dashboard'
       ? 'Dashboard'
       : segments[1] === 'session-detail'
-      ? 'Session Detail'
-      : segments[1] === 'settings'
-      ? 'Settings'
-      : 'Supervisor');
+        ? 'Session Detail'
+        : segments[1] === 'settings'
+          ? 'Settings'
+          : 'Supervisor');
 
   // On mobile, sidebar becomes a drawer
   if (isMobile) {

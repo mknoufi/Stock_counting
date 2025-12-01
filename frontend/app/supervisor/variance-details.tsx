@@ -16,18 +16,16 @@ import { Button } from '../../components/Button';
 import { spacing, typography, borderRadius, colors } from '../../styles/globalStyles';
 
 export default function VarianceDetailsScreen() {
-  const { itemCode, sessionId } = useLocalSearchParams();
+  const { itemCode } = useLocalSearchParams();
   const router = useRouter();
   const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [itemDetails, setItemDetails] = useState<any>(null);
   const [processing, setProcessing] = useState(false);
 
-  useEffect(() => {
-    loadDetails();
-  }, [itemCode, sessionId]);
 
-  const loadDetails = async () => {
+
+  const loadDetails = React.useCallback(async () => {
     try {
       setLoading(true);
       // We might need a specific endpoint for details, but for now we can use getVariances with filters
@@ -53,7 +51,11 @@ export default function VarianceDetailsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [itemCode, router]);
+
+  useEffect(() => {
+    loadDetails();
+  }, [loadDetails]);
 
   const handleApprove = async () => {
     Alert.alert(

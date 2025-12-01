@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle, TextStyle, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { spacing, typography, layout } from '../../styles/globalStyles';
@@ -116,4 +116,3 @@ const styles = StyleSheet.create({
     // Content spacing handled by children
   },
 });
-

@@ -3,12 +3,14 @@ Authentication Dependencies
 Shared dependencies for authentication across all routers
 """
 
-from fastapi import HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from .jwt_provider import jwt
 import logging
+from typing import Any, Dict, Optional, cast
+
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from typing import Dict, Any, Optional
+
+from .jwt_provider import jwt
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,7 @@ class AuthDependencies:
         if self._initialized:
             # In non-dev environments, raise error on double initialization
             import os
+
             environment = os.getenv("ENVIRONMENT", "development").lower()
             if environment in ("production", "staging"):
                 raise RuntimeError(
@@ -80,7 +83,7 @@ def init_auth_dependencies(db: AsyncIOMotorDatabase, secret_key: str, algorithm:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(auth_deps.security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(auth_deps.security),
 ) -> Dict[str, Any]:
     """
     Get current authenticated user from JWT token
@@ -88,16 +91,15 @@ async def get_current_user(
     """
     # Import at function level but verify it's available at startup
     try:
-        from error_messages import get_error_message
+        from backend.error_messages import get_error_message
     except ImportError as e:
         logger.error(f"Failed to import error_messages: {e}")
         raise HTTPException(
-            status_code=500,
-            detail="Internal error: Error message module not available"
+            status_code=500, detail="Internal error: Error message module not available"
         )
 
     try:
-        if credentials is None:
+        if not credentials:
             error = get_error_message("AUTH_TOKEN_INVALID")
             raise HTTPException(
                 status_code=401,
@@ -141,7 +143,7 @@ async def get_current_user(
                 },
             )
 
-        return user
+        return cast(Dict[str, Any], user)
 
     except jwt.ExpiredSignatureError:
         error = get_error_message("AUTH_TOKEN_EXPIRED")
@@ -181,7 +183,7 @@ def require_permissions(required_permissions: list[str]):
         current_user: dict = Depends(get_current_user),
     ) -> dict:
         """Check if user has required permissions"""
-        from error_messages import get_error_message
+        from backend.error_messages import get_error_message
 
         user_role = current_user.get("role", "")
         user_permissions = current_user.get("permissions", [])

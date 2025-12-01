@@ -3,12 +3,14 @@ Enhanced Item API - Upgraded endpoints with better error handling,
 caching, validation, and performance monitoring
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query, Request
-from typing import Optional, Dict, Any, List
+import asyncio
 import logging
 import time
 from datetime import datetime
-import asyncio
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 # Import from auth module to avoid circular imports
 from backend.auth.dependencies import get_current_user_async as get_current_user
@@ -16,22 +18,19 @@ from backend.auth.dependencies import get_current_user_async as get_current_user
 # Import other dependencies directly
 # Import services and database
 from backend.services.monitoring_service import MonitoringService
-from motor.motor_asyncio import AsyncIOMotorDatabase
 
 logger = logging.getLogger(__name__)
 
 # These will be initialized at runtime
 db: AsyncIOMotorDatabase = None
-sql_connector = None
 cache_service = None
 monitoring_service: MonitoringService = None
 
 
-def init_enhanced_api(database, sql_conn, cache_svc, monitoring_svc):
+def init_enhanced_api(database, cache_svc, monitoring_svc):
     """Initialize enhanced API with dependencies"""
-    global db, sql_connector, cache_service, monitoring_service
+    global db, cache_service, monitoring_service
     db = database
-    sql_connector = sql_conn
     cache_service = cache_svc
     monitoring_service = monitoring_svc
 
@@ -45,7 +44,7 @@ class ItemResponse:
 
     def __init__(self, item_data: Dict[str, Any], source: str, response_time_ms: float):
         self.item_data = item_data
-        self.source = source  # 'sql_server', 'mongodb', 'cache'
+        self.source = source  # 'mongodb', 'cache'
         self.response_time_ms = response_time_ms
         self.timestamp = datetime.utcnow().isoformat()
 
@@ -55,7 +54,7 @@ async def get_item_by_barcode_enhanced(
     barcode: str,
     request: Request,
     force_source: Optional[str] = Query(
-        None, description="Force data source: sql_server, mongodb, or cache"
+        None, description="Force data source: mongodb, or cache"
     ),
     include_metadata: bool = Query(True, description="Include response metadata"),
     current_user: dict = Depends(get_current_user),
@@ -136,14 +135,7 @@ async def get_item_by_barcode_enhanced(
 async def _fetch_from_specific_source(barcode: str, source: str) -> tuple[Optional[Dict], str]:
     """Fetch item from a specific data source"""
 
-    if source == "sql_server":
-        if not sql_connector.test_connection():
-            raise HTTPException(status_code=503, detail="SQL Server not available")
-
-        item = sql_connector.get_item_by_barcode(barcode)
-        return item, "sql_server"
-
-    elif source == "mongodb":
+    if source == "mongodb":
         item = await db.erp_items.find_one({"barcode": barcode})
         return item, "mongodb"
 
@@ -163,7 +155,6 @@ async def _fetch_with_fallback_strategy(barcode: str) -> tuple[Optional[Dict], s
     Intelligent fallback strategy:
     1. Try cache first (fastest)
     2. Try MongoDB (fast, most up-to-date)
-    3. Try SQL Server (slowest, authoritative)
     """
 
     # Strategy 1: Cache (if available)
@@ -185,49 +176,8 @@ async def _fetch_with_fallback_strategy(barcode: str) -> tuple[Optional[Dict], s
     except Exception as e:
         logger.warning(f"MongoDB lookup failed: {str(e)}")
 
-    # Strategy 3: SQL Server (authoritative source)
-    try:
-        if sql_connector.test_connection():
-            sql_item = sql_connector.get_item_by_barcode(barcode)
-            if sql_item:
-                # Sync this item to MongoDB for future fast access
-                asyncio.create_task(_sync_item_to_mongodb(sql_item))
-                return sql_item, "sql_server"
-    except Exception as e:
-        logger.warning(f"SQL Server lookup failed: {str(e)}")
-
     # All strategies failed
     return None, "not_found"
-
-
-async def _sync_item_to_mongodb(item: Dict[str, Any]):
-    """Background sync of SQL Server item to MongoDB"""
-    try:
-        item_doc = {
-            "item_code": item.get("item_code", ""),
-            "item_name": item.get("item_name", ""),
-            "barcode": item.get("barcode", ""),
-            "stock_qty": float(item.get("stock_qty", 0.0)),
-            "mrp": float(item.get("mrp", 0.0)),
-            "category": item.get("category", "General"),
-            "warehouse": item.get("warehouse", "Main"),
-            "uom_code": item.get("uom_code", ""),
-            "uom_name": item.get("uom_name", ""),
-            "synced_at": datetime.utcnow(),
-            "synced_from_erp": True,
-            "sync_method": "realtime",
-        }
-
-        await db.erp_items.update_one(
-            {"item_code": item_doc["item_code"]},
-            {"$set": item_doc, "$setOnInsert": {"created_at": datetime.utcnow()}},
-            upsert=True,
-        )
-
-        logger.debug(f"Background synced item to MongoDB: {item.get('item_code')}")
-
-    except Exception as e:
-        logger.error(f"Background MongoDB sync failed: {str(e)}")
 
 
 @enhanced_item_router.get("/search/advanced")
@@ -431,7 +381,7 @@ async def get_item_api_performance(current_user: dict = Depends(get_current_user
         from backend.services.database_manager import DatabaseManager
 
         db_manager = DatabaseManager(
-            mongo_client=db.client, mongo_db=db, sql_connector=sql_connector
+            mongo_client=db.client, mongo_db=db
         )
 
         # Comprehensive performance analysis
@@ -457,74 +407,16 @@ async def trigger_realtime_sync(
     item_codes: List[str] = None, current_user: dict = Depends(get_current_user)
 ):
     """
-    Trigger real-time sync for specific items or all items
+    Trigger real-time sync for specific items or all items (Now disabled as ERP is disconnected)
     """
     if current_user["role"] != "supervisor":
         raise HTTPException(status_code=403, detail="Supervisor access required")
 
-    try:
-        if item_codes:
-            # Sync specific items
-            sync_results = []
-
-            for item_code in item_codes:
-                try:
-                    # Get from SQL Server
-                    sql_item = sql_connector.get_item_by_code(item_code)
-
-                    if sql_item:
-                        # Sync to MongoDB
-                        await _sync_item_to_mongodb(sql_item)
-                        sync_results.append(
-                            {
-                                "item_code": item_code,
-                                "status": "synced",
-                                "source": "sql_server",
-                            }
-                        )
-                    else:
-                        sync_results.append(
-                            {
-                                "item_code": item_code,
-                                "status": "not_found",
-                                "source": "sql_server",
-                            }
-                        )
-
-                except Exception as e:
-                    sync_results.append(
-                        {"item_code": item_code, "status": "error", "error": str(e)}
-                    )
-
-            return {
-                "sync_type": "selective",
-                "requested_items": len(item_codes),
-                "results": sync_results,
-                "timestamp": datetime.utcnow().isoformat(),
-            }
-
-        else:
-            # Full sync - delegate to advanced sync service
-            from backend.services.advanced_erp_sync import AdvancedERPSyncService
-
-            advanced_sync = AdvancedERPSyncService(
-                sql_connector=sql_connector,
-                mongo_db=db,
-                sync_interval=3600,
-                batch_size=500,
-            )
-
-            sync_stats = await advanced_sync.sync_items_advanced()
-
-            return {
-                "sync_type": "full",
-                "stats": sync_stats,
-                "timestamp": datetime.utcnow().isoformat(),
-            }
-
-    except Exception as e:
-        logger.error(f"Realtime sync failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Realtime sync failed: {str(e)}")
+    return {
+        "sync_type": "disabled",
+        "message": "Real-time sync is disabled because the ERP connection is not configured.",
+        "timestamp": datetime.utcnow().isoformat(),
+    }
 
 
 @enhanced_item_router.get("/database/status")
@@ -536,7 +428,7 @@ async def get_database_status(current_user: dict = Depends(get_current_user)):
         from backend.services.database_manager import DatabaseManager
 
         db_manager = DatabaseManager(
-            mongo_client=db.client, mongo_db=db, sql_connector=sql_connector
+            mongo_client=db.client, mongo_db=db
         )
 
         return await db_manager.check_database_health()
@@ -558,7 +450,7 @@ async def optimize_database_performance(current_user: dict = Depends(get_current
         from backend.services.database_manager import DatabaseManager
 
         db_manager = DatabaseManager(
-            mongo_client=db.client, mongo_db=db, sql_connector=sql_connector
+            mongo_client=db.client, mongo_db=db
         )
 
         optimization_results = await db_manager.optimize_database_performance()
@@ -572,61 +464,3 @@ async def optimize_database_performance(current_user: dict = Depends(get_current
     except Exception as e:
         logger.error(f"Database optimization failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
-
-
-# Helper function for background MongoDB sync
-async def _sync_item_to_mongodb(item: Dict[str, Any]):
-    """Sync a single item from SQL Server to MongoDB"""
-    try:
-        item_doc = {
-            "item_code": item.get("item_code", ""),
-            "item_name": item.get("item_name", ""),
-            "barcode": item.get("barcode", ""),
-            "stock_qty": float(item.get("stock_qty", 0.0)),
-            "mrp": float(item.get("mrp", 0.0)),
-            "category": item.get("category", "General"),
-            "subcategory": item.get("subcategory", ""),
-            "warehouse": item.get("warehouse", "Main"),
-            "uom_code": item.get("uom_code", ""),
-            "uom_name": item.get("uom_name", ""),
-            "floor": item.get("floor", ""),
-            "rack": item.get("rack", ""),
-            "batch_no": item.get("batch_no", ""),
-            "mfg_date": item.get("mfg_date"),
-            "expiry_date": item.get("expiry_date"),
-            "synced_at": datetime.utcnow(),
-            "synced_from_erp": True,
-            "sync_method": "realtime",
-            "data_version": 3,  # Incremented for new fields
-            # Preserve verification metadata if exists
-            "$setOnInsert": {
-                "verified": False,
-                "verified_by": None,
-                "verified_at": None,
-                "last_scanned_at": None,
-            },
-        }
-
-        # Use $setOnInsert to preserve existing verification data
-        update_doc = {
-            "$set": {k: v for k, v in item_doc.items() if k != "$setOnInsert"},
-            "$setOnInsert": {
-                "created_at": datetime.utcnow(),
-                "verified": False,
-                "verified_by": None,
-                "verified_at": None,
-                "last_scanned_at": None,
-            },
-        }
-
-        await db.erp_items.update_one(
-            {"item_code": item_doc["item_code"]},
-            update_doc,
-            upsert=True,
-        )
-
-        return True
-
-    except Exception as e:
-        logger.error(f"MongoDB sync failed for item {item.get('item_code')}: {str(e)}")
-        return False

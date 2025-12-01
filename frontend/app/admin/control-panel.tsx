@@ -15,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { usePermissions } from '../../hooks/usePermissions';
-import api from '../../services/api';
 import {
   getServicesStatus,
   getSystemIssues,
@@ -67,10 +66,10 @@ export default function ControlPanelScreen() {
       );
       return;
     }
-    
+
     // Load data with timeout safety
     loadData();
-    
+
     // Safety: Force loading to false after 10 seconds max
     const maxTimeout = setTimeout(() => {
       if (loading) {
@@ -93,7 +92,7 @@ export default function ControlPanelScreen() {
         loadData();
       }
     }, 10000);
-    
+
     return () => {
       clearTimeout(maxTimeout);
       clearInterval(interval);
@@ -104,12 +103,12 @@ export default function ControlPanelScreen() {
   const loadData = async () => {
     try {
       setRefreshing(true);
-      
+
       // Add timeout wrapper for API calls
       const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number = 5000): Promise<T> => {
         return Promise.race([
           promise,
-          new Promise<T>((_, reject) => 
+          new Promise<T>((_, reject) =>
             setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
           ),
         ]);
@@ -139,7 +138,7 @@ export default function ControlPanelScreen() {
       if (statsRes.status === 'fulfilled' && statsRes.value?.data) {
         setSystemStats(statsRes.value.data);
       }
-      
+
       setLastUpdate(new Date());
     } catch (error: any) {
       console.error('Control panel loadData error:', error);
@@ -191,7 +190,7 @@ export default function ControlPanelScreen() {
     try {
       await Clipboard.setStringAsync(url);
       Alert.alert('Copied', 'URL copied to clipboard');
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to copy URL');
     }
   };

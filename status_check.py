@@ -5,9 +5,8 @@ Checks the current status of Stock Verification System components
 """
 
 import subprocess
-import os
-import sys
 from pathlib import Path
+
 
 def run_command(cmd):
     """Run a shell command and return output"""
@@ -17,33 +16,36 @@ def run_command(cmd):
     except Exception as e:
         return "", str(e), 1
 
+
 def check_port(port):
     """Check if a port is in use and return PID if found"""
     stdout, stderr, code = run_command(f"lsof -ti :{port}")
     if code == 0 and stdout:
-        return stdout.split('\n')[0]
+        return stdout.split("\n")[0]
     return None
+
 
 def check_process(pid):
     """Check if a process is still running"""
     stdout, stderr, code = run_command(f"kill -0 {pid}")
     return code == 0
 
+
 def main():
     print("🔍 STOCK VERIFICATION SYSTEM - STATUS CHECK")
     print("=" * 50)
     print()
-    
+
     # Check service ports
     services = {
         3000: "Enhanced Admin Panel",
-        8000: "Backend API Server", 
-        19006: "Frontend Dev Server"
+        8000: "Backend API Server",
+        19006: "Frontend Dev Server",
     }
-    
+
     print("📊 SERVICE STATUS:")
     running_services = 0
-    
+
     for port, service in services.items():
         pid = check_port(port)
         if pid:
@@ -51,16 +53,16 @@ def main():
             running_services += 1
         else:
             print(f"❌ {service}: NOT RUNNING (Port {port})")
-    
+
     print()
-    
+
     # Check PID files if logs directory exists
     print("📂 PID FILES:")
     logs_dir = Path("logs")
     if logs_dir.exists():
         pid_files = ["admin.pid", "backend.pid", "frontend.pid"]
         services_names = ["Admin Panel", "Backend API", "Frontend"]
-        
+
         for pid_file, service_name in zip(pid_files, services_names):
             pid_path = logs_dir / pid_file
             if pid_path.exists():
@@ -76,9 +78,9 @@ def main():
                 print(f"❌ {service_name}: No PID file found")
     else:
         print("❌ Logs directory does not exist")
-    
+
     print()
-    
+
     # Check Python environment
     print("🐍 PYTHON ENVIRONMENT:")
     venv_python = Path(".venv/bin/python")
@@ -90,9 +92,9 @@ def main():
             print("⚠️  Virtual environment exists but Python not working")
     else:
         print("❌ Virtual environment not found")
-    
+
     print()
-    
+
     # Check MongoDB
     print("🍃 DATABASE:")
     stdout, stderr, code = run_command("pgrep mongod")
@@ -100,28 +102,28 @@ def main():
         print("✅ MongoDB is running")
     else:
         print("❌ MongoDB not detected")
-    
+
     print()
-    
+
     # Check key directories and files
     print("📁 PROJECT STRUCTURE:")
     key_paths = {
         "admin-panel": "Admin Panel Directory",
-        "backend": "Backend Directory", 
+        "backend": "Backend Directory",
         "frontend": "Frontend Directory",
         "admin-panel/enhanced-server.py": "Enhanced Admin Server",
         "backend/server.py": "Backend Server",
-        "frontend/package.json": "Frontend Config"
+        "frontend/package.json": "Frontend Config",
     }
-    
+
     for path, description in key_paths.items():
         if Path(path).exists():
             print(f"✅ {description}")
         else:
             print(f"❌ {description}: MISSING")
-    
+
     print()
-    
+
     # Summary and recommendations
     print("🎯 SYSTEM SUMMARY:")
     if running_services == 0:
@@ -136,8 +138,9 @@ def main():
     else:
         print(f"⚠️  Partial system running ({running_services}/{len(services)} services)")
         print("💡 To restart all: ./stop_all_services.sh && ./quick_start.sh")
-    
+
     print()
+
 
 if __name__ == "__main__":
     main()

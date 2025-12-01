@@ -10,13 +10,15 @@ explicit and handle them in a functional way.
 import asyncio
 import logging
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import UpdateMany
 
 from backend.sql_server_connector import SQLServerConnector
-from backend.utils.result import Result, Ok, Fail, result_function
-from .errors import DatabaseError, ConnectionError, SyncError, SyncConfigError
+from backend.utils.result import Fail, Ok, Result, result_function
+
+from .errors import ConnectionError, DatabaseError, SyncConfigError, SyncError
 
 logger = logging.getLogger(__name__)
 

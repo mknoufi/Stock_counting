@@ -1,10 +1,15 @@
 import { flags } from '../constants/flags';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
 let mmkvInstance: any | null = null;
 
 async function getMMKV() {
-  if (!flags.enableMMKV) return null;
+  // MMKV is a native module and doesn't work on web or Expo Go
+  // NitroModules (required by MMKV) are not supported in Expo Go
+  const isExpoGo = Constants.executionEnvironment === 'storeClient';
+  if (!flags.enableMMKV || Platform.OS === 'web' || isExpoGo) return null;
   try {
     if (!mmkvInstance) {
       const mod = await import('react-native-mmkv');

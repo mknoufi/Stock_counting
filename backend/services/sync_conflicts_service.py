@@ -4,11 +4,13 @@ Detect and resolve synchronization conflicts between local and server data
 """
 
 import logging
-from datetime import datetime
-from typing import Optional, Dict, List, Any
+from datetime import datetime, timezone
 from enum import Enum
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from typing import Any, Dict, List, Optional
+
 from bson import ObjectId
+from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.errors import PyMongoError
 
 logger = logging.getLogger(__name__)
 
@@ -46,18 +48,15 @@ class SyncConflictsService:
         Returns conflict_id if conflict detected, None otherwise
         """
         # Check for conflicting changes
-        conflicts = []
-
-        for key in local_data:
-            if key in server_data:
-                if local_data[key] != server_data[key]:
-                    conflicts.append(
-                        {
-                            "field": key,
-                            "local_value": local_data[key],
-                            "server_value": server_data[key],
-                        }
-                    )
+        conflicts = [
+            {
+                "field": key,
+                "local_value": local_data[key],
+                "server_value": server_data[key],
+            }
+            for key in local_data
+            if key in server_data and local_data[key] != server_data[key]
+        ]
 
         # If no conflicts, return None
         if not conflicts:
@@ -76,7 +75,7 @@ class SyncConflictsService:
             "resolution": None,
             "resolved_by": None,
             "resolved_at": None,
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
             "local_timestamp": local_data.get("updated_at") or local_data.get("created_at"),
             "server_timestamp": server_data.get("updated_at") or server_data.get("created_at"),
         }
@@ -174,7 +173,7 @@ class SyncConflictsService:
                     ),
                     "resolution": resolution.value,
                     "resolved_by": resolved_by,
-                    "resolved_at": datetime.utcnow(),
+                    "resolved_at": datetime.now(timezone.utc),
                     "resolved_data": resolved_data,
                 }
             },
@@ -208,13 +207,13 @@ class SyncConflictsService:
             return
 
         # Update entity with resolved data
-        data["updated_at"] = datetime.utcnow()
+        data["updated_at"] = datetime.now(timezone.utc)
         data["conflict_resolved"] = True
 
         try:
             await collection.update_one({"_id": ObjectId(entity_id)}, {"$set": data})
             logger.info(f"Applied resolved data to {entity_type} {entity_id}")
-        except Exception as e:
+        except PyMongoError as e:
             logger.error(f"Failed to apply resolved data: {str(e)}")
             raise
 
@@ -233,44 +232,50 @@ class SyncConflictsService:
 
         for conflict in conflicts:
             try:
-                # Determine resolution based on strategy
-                if strategy == "server_wins":
-                    resolution = ConflictResolution.ACCEPT_SERVER
-                elif strategy == "local_wins":
-                    resolution = ConflictResolution.ACCEPT_LOCAL
-                elif strategy == "newest_wins":
-                    # Compare timestamps
-                    local_ts = conflict.get("local_timestamp")
-                    server_ts = conflict.get("server_timestamp")
-
-                    if local_ts and server_ts:
-                        if isinstance(local_ts, str):
-                            local_ts = datetime.fromisoformat(local_ts.replace("Z", "+00:00"))
-                        if isinstance(server_ts, str):
-                            server_ts = datetime.fromisoformat(server_ts.replace("Z", "+00:00"))
-
-                        resolution = (
-                            ConflictResolution.ACCEPT_LOCAL
-                            if local_ts > server_ts
-                            else ConflictResolution.ACCEPT_SERVER
-                        )
-                    else:
-                        resolution = ConflictResolution.ACCEPT_SERVER
-                else:
-                    continue
-
-                # Resolve conflict
-                await self.resolve_conflict(conflict["id"], resolution, "system_auto_resolve")
-
-                resolved_count += 1
-
-            except Exception as e:
+                if await self._resolve_single_conflict(conflict, strategy):
+                    resolved_count += 1
+            except (PyMongoError, ValueError) as e:
                 logger.error(f"Failed to auto-resolve conflict {conflict['id']}: {str(e)}")
                 continue
 
         logger.info(f"Auto-resolved {resolved_count} conflicts using '{strategy}' strategy")
 
         return resolved_count
+
+    async def _resolve_single_conflict(self, conflict: Dict[str, Any], strategy: str) -> bool:
+        """Helper to resolve a single conflict based on strategy"""
+        # Determine resolution based on strategy
+        if strategy == "server_wins":
+            resolution = ConflictResolution.ACCEPT_SERVER
+        elif strategy == "local_wins":
+            resolution = ConflictResolution.ACCEPT_LOCAL
+        elif strategy == "newest_wins":
+            resolution = self._determine_newest_wins_resolution(conflict)
+        else:
+            return False
+
+        # Resolve conflict
+        await self.resolve_conflict(conflict["id"], resolution, "system_auto_resolve")
+        return True
+
+    def _determine_newest_wins_resolution(self, conflict: Dict[str, Any]) -> ConflictResolution:
+        """Determine resolution based on timestamps"""
+        local_ts = conflict.get("local_timestamp")
+        server_ts = conflict.get("server_timestamp")
+
+        if local_ts and server_ts:
+            if isinstance(local_ts, str):
+                local_ts = datetime.fromisoformat(local_ts.replace("Z", "+00:00"))
+            if isinstance(server_ts, str):
+                server_ts = datetime.fromisoformat(server_ts.replace("Z", "+00:00"))
+
+            return (
+                ConflictResolution.ACCEPT_LOCAL
+                if local_ts > server_ts
+                else ConflictResolution.ACCEPT_SERVER
+            )
+        
+        return ConflictResolution.ACCEPT_SERVER
 
     async def get_conflict_stats(self) -> Dict[str, Any]:
         """Get statistics about sync conflicts"""

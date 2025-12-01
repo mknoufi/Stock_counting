@@ -1,13 +1,16 @@
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
-from bson import ObjectId
 
 from backend.auth.dependencies import get_current_user_async as get_current_user
-from backend.server import db, create_safe_error_response, sanitize_for_logging
+from backend.db.runtime import get_db
+from backend.utils.api_utils import create_safe_error_response, sanitize_for_logging
 
 router = APIRouter()
+
 
 class NoteCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
@@ -46,18 +49,18 @@ async def list_notes(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     try:
-        coll = db["notes"]
+        coll = get_db()["notes"]
         query: Dict[str, Any] = {}
         if q:
             safe_q = sanitize_for_logging(q)
-            query = {"$or": [
-                {"title": {"$regex": safe_q, "$options": "i"}},
-                {"content": {"$regex": safe_q, "$options": "i"}},
-            ]}
+            query = {
+                "$or": [
+                    {"title": {"$regex": safe_q, "$options": "i"}},
+                    {"content": {"$regex": safe_q, "$options": "i"}},
+                ]
+            }
         cursor = coll.find(query).sort("created_at", -1)
-        items: List[Note] = [
-            _serialize_note(doc) async for doc in cursor
-        ]
+        items: List[Note] = [_serialize_note(doc) async for doc in cursor]
         return {"success": True, "data": items, "error": None}
     except Exception as e:
         raise create_safe_error_response(500, "Failed to fetch notes", "NOTES_LIST_ERROR", str(e))
@@ -69,7 +72,7 @@ async def create_note(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     try:
-        coll = db["notes"]
+        coll = get_db()["notes"]
         now = datetime.now(timezone.utc)
         doc = {
             "title": payload.title,
@@ -91,20 +94,26 @@ async def delete_note(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     try:
-        coll = db["notes"]
+        coll = get_db()["notes"]
         try:
             oid = ObjectId(note_id)
         except Exception:
-            raise HTTPException(status_code=400, detail={
-                "success": False,
-                "error": {"message": "Invalid note id", "code": "INVALID_NOTE_ID"}
-            })
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "success": False,
+                    "error": {"message": "Invalid note id", "code": "INVALID_NOTE_ID"},
+                },
+            )
         res = await coll.delete_one({"_id": oid})
         if res.deleted_count == 0:
-            raise HTTPException(status_code=404, detail={
-                "success": False,
-                "error": {"message": "Note not found", "code": "NOTE_NOT_FOUND"}
-            })
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "success": False,
+                    "error": {"message": "Note not found", "code": "NOTE_NOT_FOUND"},
+                },
+            )
         return {"success": True, "data": {"deleted": True, "id": note_id}, "error": None}
     except HTTPException:
         raise

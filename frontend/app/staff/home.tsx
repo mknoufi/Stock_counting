@@ -23,16 +23,18 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { StaffLayout } from '../../components/layout/StaffLayout';
 import { Section } from '../../components/layout/Section';
 import { Container } from '../../components/layout/Container';
-import { useTheme } from '../../hooks/useTheme';
+
 import { colors } from '../../styles/globalStyles';
 import { useSessionsQuery } from '../../hooks/useSessionsQuery';
 import { SESSION_PAGE_SIZE } from '../../constants/config';
 import { validateMRP, validateSessionName } from '../../utils/validation';
 import { useStableDebouncedCallback } from '../../hooks/useDebouncedCallback';
 import { staffHomeStyles } from '../../styles/screens/StaffHome.styles';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { flags } from '../../constants/flags';
 
 export default function StaffHome() {
-  const theme = useTheme();
   const router = useRouter();
   const { user, logout } = useAuthStore();
 
@@ -110,9 +112,6 @@ export default function StaffHome() {
       await logout();
       // Small delay to ensure state updates propagate
       setTimeout(() => {
-        if (router.canGoBack()) {
-          router.dismissAll();
-        }
         router.replace('/login');
       }, 100);
     } catch (error) {
@@ -271,23 +270,23 @@ export default function StaffHome() {
 
     return (
       <TouchableOpacity
-        style={[styles.sessionCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+        style={styles.sessionCard}
         onPress={() => router.push(`/staff/scan?sessionId=${item.id}`)}
         activeOpacity={0.7}
       >
         <View style={styles.sessionHeader}>
-          <Text style={[styles.sessionWarehouse, { color: theme.colors.text }]}>
+          <Text style={styles.sessionWarehouse}>
             {item.warehouse}
           </Text>
           <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
             <Text style={styles.statusText}>{item.status}</Text>
           </View>
         </View>
-        <Text style={[styles.sessionDate, { color: theme.colors.textSecondary }]}>
+        <Text style={styles.sessionDate}>
           Started: {new Date(item.started_at).toLocaleString()}
         </Text>
         <View style={styles.sessionStats}>
-          <Text style={[styles.sessionStat, { color: theme.colors.textSecondary }]}>
+          <Text style={styles.sessionStat}>
             Items: {item.total_items}
           </Text>
           <Text
@@ -306,43 +305,83 @@ export default function StaffHome() {
   return (
     <StaffLayout
       title="Sessions"
+      backgroundColor={colors.backgroundDark}
       headerActions={[
         {
           icon: 'help-circle-outline',
           label: 'Help',
           onPress: () => router.push('/help'),
         },
-        {
-          icon: 'log-out-outline',
-          label: 'Logout',
-          onPress: handleLogout,
-        },
       ]}
     >
       <StatusBar style="light" />
       <Container>
-        {/* Quick Actions */}
-        <Section
-          title={`Hello, ${user?.full_name || 'User'}`}
-          subtitle="Staff Member"
-          action={{
-            label: 'Update MRP',
-            icon: 'pricetag-outline',
-            onPress: openMRPModal,
-          }}
+        {/* Premium Profile Header */}
+        <Animated.View
+          entering={flags.enableAnimations ? FadeInDown.delay(100).springify().damping(12) : undefined}
+          style={{ marginBottom: 24, marginTop: 24 }}
         >
-          <View style={styles.quickActions}>
-            <Button
-              title="Start New Counting Session"
-              onPress={handleNewSession}
-              icon="add-circle-outline"
-              size="large"
-              fullWidth
-              disabled={isLoadingSessions || isCreatingSession}
-              loading={isCreatingSession}
-            />
-          </View>
-        </Section>
+          <LinearGradient
+            colors={['#1E293B', '#0F172A']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              padding: 20,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: '#334155',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <View>
+                <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#F8FAFC', marginBottom: 4 }}>
+                  Hello, {user?.full_name?.split(' ')[0] || 'User'}
+                </Text>
+                <Text style={{ fontSize: 14, color: '#94A3B8' }}>
+                  Staff Member
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleLogout}
+                style={{
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  padding: 10,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: 'rgba(239, 68, 68, 0.2)'
+                }}
+              >
+                <Ionicons name="log-out-outline" size={22} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', marginTop: 24, gap: 12 }}>
+              <Button
+                title="Update MRP"
+                onPress={openMRPModal}
+                icon="pricetag-outline"
+                variant="outline"
+                size="medium"
+                style={{ flex: 1, borderColor: '#38BDF8', backgroundColor: 'rgba(56, 189, 248, 0.05)' }}
+                textStyle={{ color: '#38BDF8' }}
+              />
+              <Button
+                title="New Session"
+                onPress={handleNewSession}
+                icon="add-circle-outline"
+                size="medium"
+                style={{ flex: 1.5 }}
+                disabled={isLoadingSessions || isCreatingSession}
+                loading={isCreatingSession}
+              />
+            </View>
+          </LinearGradient>
+        </Animated.View>
 
         {/* Sessions List */}
         <Section title="Your Sessions">
@@ -352,7 +391,7 @@ export default function StaffHome() {
               {[1, 2, 3].map((i) => (
                 <View
                   key={i}
-                  style={[styles.sessionCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+                  style={styles.sessionCard}
                 >
                   <Skeleton width="70%" height={20} borderRadius={4} style={{ marginBottom: 8 }} />
                   <Skeleton width="60%" height={16} borderRadius={4} style={{ marginBottom: 8 }} />
@@ -370,7 +409,7 @@ export default function StaffHome() {
               keyExtractor={(item: any) => item.id}
               contentContainerStyle={styles.sessionsList}
               ListEmptyComponent={
-                <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+                <Text style={styles.emptyText}>
                   No sessions yet. Start a new one!
                 </Text>
               }
@@ -409,45 +448,31 @@ export default function StaffHome() {
             onPress={handleCancelModal}
           >
             <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-              <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>New Session</Text>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>New Session</Text>
 
-                <Text style={[styles.modalLabel, { color: theme.colors.textSecondary }]}>
+                <Text style={styles.modalLabel}>
                   Floor Name/Number:
                 </Text>
                 <TextInput
-                  style={[
-                    styles.modalInput,
-                    {
-                      backgroundColor: theme.colors.background,
-                      borderColor: theme.colors.border,
-                      color: theme.colors.text,
-                    },
-                  ]}
+                  style={styles.modalInput}
                   value={floorName}
                   onChangeText={setFloorName}
                   placeholder="e.g., Floor 1"
-                  placeholderTextColor={theme.colors.placeholder}
+                  placeholderTextColor={colors.textTertiary}
                   autoFocus={true}
                   returnKeyType="next"
                 />
 
-                <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 12 }]}>
+                <Text style={[styles.modalLabel, { marginTop: 12 }]}>
                   Rack Name/Number:
                 </Text>
                 <TextInput
-                  style={[
-                    styles.modalInput,
-                    {
-                      backgroundColor: theme.colors.background,
-                      borderColor: theme.colors.border,
-                      color: theme.colors.text,
-                    },
-                  ]}
+                  style={styles.modalInput}
                   value={rackName}
                   onChangeText={setRackName}
                   placeholder="e.g., Rack A"
-                  placeholderTextColor={theme.colors.placeholder}
+                  placeholderTextColor={colors.textTertiary}
                   returnKeyType="done"
                   onSubmitEditing={handleCreateSession}
                 />
@@ -479,35 +504,32 @@ export default function StaffHome() {
         onRequestClose={() => setShowMRPModal(false)}
       >
         <View style={styles.mrpModalOverlay}>
-          <View style={[styles.mrpModalContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={styles.mrpModalContainer}>
             <View style={styles.mrpModalHeader}>
-              <Text style={[styles.mrpModalTitle, { color: theme.colors.text }]}>Update MRP</Text>
+              <Text style={styles.mrpModalTitle}>Update MRP</Text>
               <TouchableOpacity onPress={() => setShowMRPModal(false)}>
-                <Ionicons name="close-circle" size={28} color={theme.colors.textSecondary} />
+                <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             {!selectedItem ? (
               <>
-                <Text style={[styles.mrpModalSubtitle, { color: theme.colors.textSecondary }]}>
+                <Text style={styles.mrpModalSubtitle}>
                   Search for an item
                 </Text>
                 <View
-                  style={[
-                    styles.mrpSearchContainer,
-                    { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
-                  ]}
+                  style={styles.mrpSearchContainer}
                 >
-                  <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
+                  <Ionicons name="search" size={20} color={colors.textSecondary} />
                   <TextInput
-                    style={[styles.mrpSearchInput, { color: theme.colors.text }]}
+                    style={styles.mrpSearchInput}
                     placeholder="Enter item name, code, or barcode"
-                    placeholderTextColor={theme.colors.placeholder}
+                    placeholderTextColor={colors.textTertiary}
                     value={mrpSearchQuery}
                     onChangeText={handleMRPSearch}
                     autoFocus={true}
                   />
-                  {isMRPSearching && <ActivityIndicator size="small" color={theme.colors.primary} />}
+                  {isMRPSearching && <ActivityIndicator size="small" color={colors.primary} />}
                 </View>
 
                 {mrpSearchResults.length > 0 && (
@@ -515,22 +537,19 @@ export default function StaffHome() {
                     {mrpSearchResults.map((item, index) => (
                       <TouchableOpacity
                         key={`mrp-result-${index}-${item.item_code}`}
-                        style={[
-                          styles.mrpSearchResultItem,
-                          { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
-                        ]}
+                        style={styles.mrpSearchResultItem}
                         onPress={() => selectItemForMRP(item)}
                         activeOpacity={0.7}
                       >
                         <View style={styles.mrpResultContent}>
-                          <Text style={[styles.mrpResultName, { color: theme.colors.text }]}>
+                          <Text style={styles.mrpResultName}>
                             {item.item_name}
                           </Text>
-                          <Text style={[styles.mrpResultCode, { color: theme.colors.textSecondary }]}>
+                          <Text style={styles.mrpResultCode}>
                             Code: {item.item_code}
                           </Text>
                           {item.barcode && (
-                            <Text style={[styles.mrpResultBarcode, { color: theme.colors.textSecondary }]}>
+                            <Text style={styles.mrpResultBarcode}>
                               Barcode: {item.barcode}
                             </Text>
                           )}
@@ -538,7 +557,7 @@ export default function StaffHome() {
                             Current MRP: ₹{item.mrp || 0}
                           </Text>
                         </View>
-                        <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
@@ -547,19 +566,16 @@ export default function StaffHome() {
             ) : (
               <>
                 <View
-                  style={[
-                    styles.selectedItemCard,
-                    { backgroundColor: theme.colors.background, borderColor: theme.colors.primary },
-                  ]}
+                  style={styles.selectedItemCard}
                 >
-                  <Text style={[styles.selectedItemName, { color: theme.colors.text }]}>
+                  <Text style={styles.selectedItemName}>
                     {selectedItem.item_name}
                   </Text>
-                  <Text style={[styles.selectedItemCode, { color: theme.colors.textSecondary }]}>
+                  <Text style={styles.selectedItemCode}>
                     Code: {selectedItem.item_code}
                   </Text>
                   {selectedItem.barcode && (
-                    <Text style={[styles.selectedItemBarcode, { color: theme.colors.textSecondary }]}>
+                    <Text style={styles.selectedItemBarcode}>
                       Barcode: {selectedItem.barcode}
                     </Text>
                   )}
@@ -568,18 +584,11 @@ export default function StaffHome() {
                   </Text>
                 </View>
 
-                <Text style={[styles.mrpInputLabel, { color: theme.colors.text }]}>New MRP (₹)</Text>
+                <Text style={styles.mrpInputLabel}>New MRP (₹)</Text>
                 <TextInput
-                  style={[
-                    styles.mrpInput,
-                    {
-                      backgroundColor: theme.colors.background,
-                      borderColor: theme.colors.border,
-                      color: theme.colors.text,
-                    },
-                  ]}
+                  style={styles.mrpInput}
                   placeholder="Enter new MRP"
-                  placeholderTextColor={theme.colors.placeholder}
+                  placeholderTextColor={colors.textTertiary}
                   value={newMRP}
                   onChangeText={setNewMRP}
                   keyboardType="decimal-pad"
@@ -608,4 +617,3 @@ export default function StaffHome() {
     </StaffLayout>
   );
 }
-

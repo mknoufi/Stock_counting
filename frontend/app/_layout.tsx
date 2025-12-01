@@ -5,6 +5,8 @@
 import React from 'react';
 import { Platform, View, Text, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '../store/authStore';
 import { initializeNetworkListener } from '../services/networkService';
@@ -13,11 +15,12 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ThemeService } from '../services/themeService';
 import { useSettingsStore } from '../store/settingsStore';
 import { useTheme } from '../hooks/useTheme';
+import { useSystemTheme } from '../hooks/useSystemTheme';
 import { ToastProvider } from '../components/ToastProvider';
 import { initializeBackendURL } from '../utils/backendUrl';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../services/queryClient';
-import { flags } from '../constants/flags';
+
 // import DebugPanel from '../components/DebugPanel';
 import { UnistylesThemeProvider } from '../theme/Provider';
 import { initReactotron } from '../services/devtools/reactotron';
@@ -25,13 +28,15 @@ import { startOfflineQueue, stopOfflineQueue } from '../services/offlineQueue';
 import apiClient from '../services/httpClient';
 import { initSentry } from '../services/sentry';
 
-// Module-level initialization (runs when file is loaded)
+// keep the splash screen visible while complete fetching resources
+SplashScreen.preventAutoHideAsync();
 
 // Provide a single place to bootstrap auth, settings, network listeners, and routing.
 export default function RootLayout() {
   const { user, isLoading, loadStoredAuth } = useAuthStore();
   const { loadSettings } = useSettingsStore();
   const theme = useTheme();
+  useSystemTheme();
   const segments = useSegments();
   const router = useRouter();
   const [isInitialized, setIsInitialized] = React.useState(false);
@@ -39,11 +44,11 @@ export default function RootLayout() {
   const cleanupRef = React.useRef<(() => void)[]>([]);
 
   // Development-only logging (removed in production builds)
-  if (__DEV__) {
-    React.useEffect(() => {
+  React.useEffect(() => {
+    if (__DEV__) {
       // Only log in development mode
-    });
-  }
+    }
+  }, []);
 
   React.useEffect(() => {
     // Initialize Sentry (non-blocking, only in production)
@@ -118,9 +123,9 @@ export default function RootLayout() {
           const syncService = initializeSyncService();
 
           // Start offline queue (if enabled) after listeners are ready
-          try { 
-            startOfflineQueue(apiClient); 
-          } catch (e) { 
+          try {
+            startOfflineQueue(apiClient);
+          } catch (e) {
             if (__DEV__) {
               console.warn('Offline queue start failed:', e);
             }
@@ -138,6 +143,8 @@ export default function RootLayout() {
         clearTimeout(maxTimeout);
         setIsInitialized(true);
         setInitError(null);
+        console.log('✅ [INIT] Initialization completed successfully');
+        await SplashScreen.hideAsync();
       } catch (error: unknown) {
         const err = error instanceof Error ? error : new Error(String(error));
         const errorMessage = err.message || String(error);
@@ -155,8 +162,10 @@ export default function RootLayout() {
         }
         setInitError(errorMessage);
         // Always set initialized to true to prevent infinite loading
+        console.log('⚠️ [INIT] Initialization had errors but continuing...');
         clearTimeout(maxTimeout);
         setIsInitialized(true);
+        await SplashScreen.hideAsync();
       }
     };
 
@@ -181,7 +190,18 @@ export default function RootLayout() {
   React.useEffect(() => {
     // Wait for initialization and loading to complete
     if (!isInitialized || isLoading) {
+      if (__DEV__) {
+        console.log('⏳ [NAV] Waiting for initialization:', { isInitialized, isLoading });
+      }
       return;
+    }
+
+    if (__DEV__) {
+      console.log('🚀 [NAV] Starting navigation logic:', {
+        user: user ? { role: user.role, username: user.username } : null,
+        currentRoute: segments[0],
+        platform: Platform.OS
+      });
     }
 
     // Small delay to prevent redirect loops on web
@@ -197,46 +217,77 @@ export default function RootLayout() {
 
       // If no user, redirect to login/register/welcome only
       if (!user) {
+        if (__DEV__) {
+          console.log('👤 [NAV] No user, checking route:', { isIndexPage, isRegisterPage, isLoginPage, isWelcomePage });
+        }
         if (!isIndexPage && !isRegisterPage && !isLoginPage && !isWelcomePage) {
+          if (__DEV__) {
+            console.log('🔄 [NAV] Redirecting to /welcome (no user)');
+          }
           router.replace('/welcome');
         }
         return;
       }
 
       // If user exists and is on auth pages, redirect to their dashboard
-      if (isLoginPage || isRegisterPage || isIndexPage) {
+      if (isLoginPage || isRegisterPage || isIndexPage || isWelcomePage) {
+        let targetRoute: string;
         // On web, always redirect admin/supervisor to admin panel
         if (Platform.OS === 'web' && (user.role === 'supervisor' || user.role === 'admin')) {
-          router.replace('/admin/metrics');
+          targetRoute = '/admin/metrics';
         } else if (user.role === 'supervisor' || user.role === 'admin') {
-          router.replace('/supervisor/dashboard');
+          targetRoute = '/supervisor/dashboard';
         } else {
-          router.replace('/staff/home');
+          targetRoute = '/staff/home';
         }
+
+        if (__DEV__) {
+          console.log('🔄 [NAV] User logged in on auth page, redirecting:', {
+            from: currentRoute,
+            to: targetRoute,
+            role: user.role
+          });
+        }
+        router.replace(targetRoute as any);
         return;
       }
 
       // Ensure users stay in their role-specific areas
       // On web, admin/supervisor should go to admin control panel
       if (Platform.OS === 'web' && (user.role === 'supervisor' || user.role === 'admin') && !inAdminGroup) {
+        if (__DEV__) {
+          console.log('🔄 [NAV] Redirecting admin/supervisor to control panel');
+        }
         router.replace('/admin/control-panel');
       } else if ((user.role === 'supervisor' || user.role === 'admin') && !inSupervisorGroup && !inAdminGroup) {
+        if (__DEV__) {
+          console.log('🔄 [NAV] Redirecting supervisor/admin to dashboard');
+        }
         router.replace('/supervisor/dashboard');
       } else if (user.role === 'staff' && !inStaffGroup) {
+        if (__DEV__) {
+          console.log('🔄 [NAV] Redirecting staff to home');
+        }
         router.replace('/staff/home');
+      } else {
+        if (__DEV__) {
+          console.log('✅ [NAV] User is in correct area, no redirect needed');
+        }
       }
-    }, Platform.OS === 'web' ? 200 : 0);
+    }, Platform.OS === 'web' ? 200 : 100);
 
     return () => clearTimeout(timer);
   }, [isInitialized, isLoading, router, segments, user]);
 
-  // Show loading state on web to prevent blank screen
-  if (!isInitialized && Platform.OS === 'web') {
+  // Show loading state to prevent blank screen (both web and mobile)
+  if (!isInitialized || isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212' }}>
-        <Text style={{ color: '#00E676', fontSize: 18, fontWeight: 'bold' }}>Loading Admin Panel...</Text>
+        <Text style={{ color: '#00E676', fontSize: 18, fontWeight: 'bold' }}>
+          {Platform.OS === 'web' ? 'Loading Admin Panel...' : 'Loading...'}
+        </Text>
         <Text style={{ color: '#888', fontSize: 14, marginTop: 10 }}>Please wait</Text>
-        <ActivityIndicator color="#00E676" style={{ marginTop: 16 }} />
+        <ActivityIndicator color="#00E676" style={{ marginTop: 16 }} size="large" />
         {initError && (
           <Text style={{ color: '#FF5252', fontSize: 12, marginTop: 20, padding: 10, textAlign: 'center' }}>
             Warning: {initError}
@@ -264,7 +315,12 @@ export default function RootLayout() {
           <ToastProvider>
             <StatusBar style={theme.dark ? 'light' : 'dark'} />
             {/* {__DEV__ && flags.enableDebugPanel && <DebugPanel />} */}
-            <Stack screenOptions={{ headerShown: false }}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: '#121212' }
+              }}
+            >
               <Stack.Screen name="index" options={{ headerShown: false }} />
               <Stack.Screen name="login" options={{ headerShown: false }} />
               <Stack.Screen name="welcome" />

@@ -1,8 +1,3 @@
-/**
- * Type definitions for scan screen components
- * Extracted from scan.tsx for better organization
- */
-
 export type NormalizedMrpVariant = {
   id?: string;
   value: number;
@@ -20,15 +15,17 @@ export type SerialInput = {
 
 export type PhotoProofType = 'ITEM' | 'SHELF' | 'SERIAL' | 'DAMAGE';
 
-export type PhotoProofDraft = {
-  id: string;
-  base64: string;
-  previewUri: string;
-  type: PhotoProofType;
-  capturedAt: string;
-};
-
 export type ScannerMode = 'item' | 'serial';
+
+export interface PhotoProofDraft {
+  id: string;
+  uri: string;
+  type: PhotoProofType;
+  timestamp: string;
+  base64?: string;
+  capturedAt?: string;
+  previewUri?: string;
+}
 
 export interface Item {
   id: string;
@@ -37,7 +34,7 @@ export interface Item {
   barcode?: string;
   mrp?: number | string;
   mrp_variants?: NormalizedMrpVariant[];
-  mrp_history?: Array<{ value: number | string; date?: string; source?: string }>;
+  mrp_history?: { value: number | string; date?: string; source?: string }[];
   quantity?: number;
   stock_qty?: number;
   counted_quantity?: number;
@@ -59,6 +56,19 @@ export interface VarianceReason {
   description?: string;
 }
 
+export interface CountLine {
+  id?: string;
+  item_code: string;
+  counted_qty?: number;
+  damaged_qty?: number;
+  non_returnable_damaged_qty?: number;
+  variance_reason?: string;
+  variance_note?: string;
+  remark?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
 export interface WorkflowState {
   step: 'scan' | 'quantity' | 'serial' | 'photo' | 'complete';
   expectedSerialCount: number;
@@ -70,7 +80,7 @@ export interface WorkflowState {
   serialInputs: SerialInput[];
   requiredSerialCount: number;
   serialInputTarget: number;
-  existingCountLine: any;
+  existingCountLine: CountLine | null;
   showAddQuantityModal: boolean;
   additionalQty: string;
 }
@@ -84,3 +94,48 @@ export interface ScanFormData {
   varianceNote: string;
 }
 
+export interface CreateCountLinePayload {
+  session_id: string;
+  item_code: string;
+  counted_qty: number;
+  damaged_qty: number;
+  non_returnable_damaged_qty: number;
+  variance_reason: string | null;
+  variance_note: string | null;
+  remark: string | null;
+  item_condition?: string;
+  serial_numbers?: {
+    label: string;
+    value: string;
+    captured_at: string;
+  }[];
+  photo_proofs?: {
+    id: string;
+    type: PhotoProofType;
+    base64?: string;
+    captured_at?: string;
+  }[];
+  mrp_counted?: number;
+  mrp_source?: string;
+  variant_id?: string;
+  variant_barcode?: string;
+  floor_no?: string | null;
+  rack_no?: string | null;
+  mark_location?: string | null;
+  sr_no?: string | null;
+  manufacturing_date?: string | null;
+  [key: string]: unknown;
+}
+
+export interface ApiErrorResponse {
+  response?: {
+    data?: {
+      detail?: {
+        message?: string;
+      } | string;
+      message?: string;
+    };
+    status?: number;
+  };
+  message?: string;
+}

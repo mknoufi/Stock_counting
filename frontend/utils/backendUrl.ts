@@ -13,7 +13,9 @@ export const clearBackendURLCache = () => {
   console.log('🔄 Cleared backend URL cache');
 };
 
-const DEFAULT_PORT = process.env.EXPO_PUBLIC_BACKEND_PORT || '8001';
+// Force port 8001 if env var is stale, otherwise use env var or default to 8001
+const envPort = process.env.EXPO_PUBLIC_BACKEND_PORT;
+const DEFAULT_BACKEND_PORT = (envPort && envPort !== '8001') ? envPort : '8001';
 
 const normalizeUrl = (url: string) => {
   if (url.endsWith('/')) {
@@ -194,7 +196,7 @@ export const getBackendURL = async (): Promise<string> => {
       // If we got a real IP (not localhost), use it
       if (host && host !== 'localhost' && host !== '127.0.0.1') {
         const discoveredPort = await discoverBackendPort(host);
-        const port = discoveredPort ? discoveredPort.toString() : DEFAULT_PORT;
+        const port = discoveredPort ? discoveredPort.toString() : DEFAULT_BACKEND_PORT;
         const url = `http://${host}:${port}`;
         cachedUrl = normalizeUrl(url);
         console.log(`📡 Auto-detected backend URL for mobile: ${cachedUrl}`);
@@ -215,7 +217,7 @@ export const getBackendURL = async (): Promise<string> => {
     // Fallback: Try to discover port dynamically
     const host = deriveHost();
     const discoveredPort = await discoverBackendPort(host);
-    const port = discoveredPort ? discoveredPort.toString() : DEFAULT_PORT;
+    const port = discoveredPort ? discoveredPort.toString() : DEFAULT_BACKEND_PORT;
 
     const url = `http://${host}:${port}`;
 
@@ -227,8 +229,8 @@ export const getBackendURL = async (): Promise<string> => {
       warnedFallback = true;
     }
 
-    if (discoveredPort && discoveredPort !== parseInt(DEFAULT_PORT)) {
-      console.log(`⚠️  Backend is running on port ${discoveredPort} instead of default ${DEFAULT_PORT}`);
+    if (discoveredPort && discoveredPort !== parseInt(DEFAULT_BACKEND_PORT)) {
+      console.log(`⚠️  Backend is running on port ${discoveredPort} instead of default ${DEFAULT_BACKEND_PORT}`);
     }
 
     cachedUrl = normalizeUrl(url);
@@ -249,7 +251,7 @@ export const getBackendURLSync = (): string => {
     const host = deriveHost();
     // If we got a real IP (not localhost), use it immediately
     if (host && host !== 'localhost' && host !== '127.0.0.1') {
-      const url = `http://${host}:${DEFAULT_PORT}`;
+      const url = `http://${host}:${DEFAULT_BACKEND_PORT}`;
       console.log(`📡 Sync backend URL (mobile IP detected): ${url}`);
       // Don't cache here - let async version handle caching after discovery
       return normalizeUrl(url);
@@ -264,7 +266,7 @@ export const getBackendURLSync = (): string => {
       if (envHost && (envHost === 'localhost' || envHost === '127.0.0.1')) {
         // Ignore localhost in env for mobile, try to derive IP
         const host = deriveHost();
-        const url = `http://${host}:${DEFAULT_PORT}`;
+        const url = `http://${host}:${DEFAULT_BACKEND_PORT}`;
         console.log(`📡 Sync backend URL (ignoring localhost in env, using derived): ${url}`);
         return normalizeUrl(url);
       }
@@ -274,7 +276,7 @@ export const getBackendURLSync = (): string => {
   }
 
   const host = deriveHost();
-  const url = `http://${host}:${DEFAULT_PORT}`;
+  const url = `http://${host}:${DEFAULT_BACKEND_PORT}`;
   // Don't cache here - let async version handle caching after discovery
   return normalizeUrl(url);
 };
@@ -350,7 +352,7 @@ export const getPortMapping = async (): Promise<{
 }> => {
   const backendUrl = await getBackendURL();
   const url = new URL(backendUrl);
-  const backendPort = parseInt(url.port) || 8000;
+  const backendPort = parseInt(url.port) || 8001;
 
   const mongodbInfo = await getMongoDBInfo();
 

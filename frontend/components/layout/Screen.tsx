@@ -14,7 +14,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useTheme } from '@/hooks/useTheme';
-import { layout, spacing } from '../../styles/globalStyles';
+import { layout } from '../../styles/globalStyles';
 
 export type ScreenVariant = 'default' | 'scrollable' | 'fullscreen';
 
@@ -122,4 +122,3 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-

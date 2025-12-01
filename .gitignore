@@ -129,3 +129,7 @@ archive_old_docs/
 
 # React Native Metro cache
 frontend/.metro-cache/
+
+# Temporary files
+tmp/
+.tmp/

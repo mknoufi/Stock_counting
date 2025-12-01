@@ -4,7 +4,7 @@ echo "🔧 RESTARTING BACKEND SERVER"
 echo "============================"
 echo ""
 
-cd /Users/noufi1/STOCK_VERIFY_2-db-maped
+cd "/Users/noufi1/cursor new/STOCK_VERIFY_2-db-maped"
 
 # Kill any existing backend processes
 echo "🛑 Stopping existing backend processes..."
@@ -19,12 +19,12 @@ echo "🚀 Starting fresh backend server..."
 mkdir -p logs
 
 # Start backend in background with proper Python path
-export PYTHONPATH="/Users/noufi1/STOCK_VERIFY_2-db-maped"
-nohup /Users/noufi1/STOCK_VERIFY_2-db-maped/.venv/bin/python -m backend.server > logs/backend.log 2>&1 &
+export PYTHONPATH="/Users/noufi1/cursor new/STOCK_VERIFY_2-db-maped"
+nohup "/Users/noufi1/cursor new/STOCK_VERIFY_2-db-maped/.venv/bin/python" -m backend.server > logs/backend.log 2>&1 &
 BACKEND_PID=$!
 
 echo "✅ Backend started with PID: $BACKEND_PID"
-echo $BACKEND_PID > ../logs/backend.pid
+echo $BACKEND_PID > logs/backend.pid
 
 cd ..
 
@@ -35,7 +35,7 @@ sleep 5
 echo "🧪 Testing backend..."
 if curl -s -f http://localhost:8001/health >/dev/null 2>&1; then
     echo "✅ Backend is running and responding!"
-    echo "🌐 Local: http://localhost:8001" 
+    echo "🌐 Local: http://localhost:8001"
     echo "📚 Docs: http://localhost:8001/docs"
     echo "📱 Mobile: http://192.168.1.32:8001"
     echo ""
@@ -44,7 +44,7 @@ else
     echo "❌ Backend not responding"
     echo "📋 Check logs:"
     echo "   tail -f logs/backend.log"
-    
+
     if [ -f "logs/backend.log" ]; then
         echo ""
         echo "--- Last 15 lines of backend log ---"

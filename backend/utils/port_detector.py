@@ -3,9 +3,9 @@ Port Detection Utility for Backend
 Automatically detect and use available ports
 """
 
-import socket
-import os
 import logging
+import os
+import socket
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +72,9 @@ class PortDetector:
                 if result == 0:
                     # Port is open, verify it's MongoDB by trying a simple connection
                     try:
-                        from motor.motor_asyncio import AsyncIOMotorClient
                         import asyncio
+
+                        from motor.motor_asyncio import AsyncIOMotorClient
 
                         client = AsyncIOMotorClient(
                             f"mongodb://{host}:{port}", serverSelectionTimeoutMS=1000

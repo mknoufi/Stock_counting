@@ -45,7 +45,7 @@ export const ItemFilters: React.FC<ItemFiltersProps> = ({
 
   useEffect(() => {
     onFilterChange(filters);
-  }, [filters]);
+  }, [filters, onFilterChange]);
 
   const updateFilter = (key: keyof FilterValues, value: any) => {
     setFilters((prev) => {
@@ -423,4 +423,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-

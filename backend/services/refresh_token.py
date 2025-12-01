@@ -3,11 +3,13 @@ Refresh Token Service
 Implements JWT refresh tokens with automatic rotation for enhanced security
 """
 
-from backend.auth.jwt_provider import jwt
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 from motor.motor_asyncio import AsyncIOMotorDatabase
+
+from backend.auth.jwt_provider import jwt
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNetworkStore } from '../services/networkService';
-import { getOfflineQueue, getCacheStats } from '../services/offlineStorage';
+import { getOfflineQueue } from '../services/offlineStorage';
 import { syncOfflineQueue } from '../services/api';
 
 interface NetworkStatusBannerProps {

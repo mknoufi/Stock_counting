@@ -5,13 +5,13 @@ Comprehensive test suite for the Result type implementation.
 import pytest
 
 from backend.utils.result import (
-    Result,
-    Ok,
     Fail,
     Left,
+    Ok,
+    Result,
     Right,
-    result_function,
     UnwrapError,
+    result_function,
 )
 
 

@@ -3,12 +3,13 @@ Report Generation Module
 Generates comprehensive reports in multiple formats (Excel, CSV, PDF)
 """
 
-from typing import List, Dict
-import pandas as pd
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
 import io
 import logging
+from typing import Dict, List
+
+import pandas as pd
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
 
 logger = logging.getLogger(__name__)
 
@@ -85,12 +86,18 @@ class ReportGenerator:
 
         # Calculate stats
         total_items = len(count_lines)
-        with_variance = len([l for l in count_lines if l.get("variance", 0) != 0])
+        with_variance = len(
+            [line_entry for line_entry in count_lines if line_entry.get("variance", 0) != 0]
+        )
         positive_variance = sum(
-            l.get("variance", 0) for l in count_lines if l.get("variance", 0) > 0
+            line_entry.get("variance", 0)
+            for line_entry in count_lines
+            if line_entry.get("variance", 0) > 0
         )
         negative_variance = sum(
-            l.get("variance", 0) for l in count_lines if l.get("variance", 0) < 0
+            line_entry.get("variance", 0)
+            for line_entry in count_lines
+            if line_entry.get("variance", 0) < 0
         )
 
         stats_data = [
@@ -177,7 +184,9 @@ class ReportGenerator:
     def _create_variance_sheet(ws, count_lines: List[Dict]):
         """Create variance analysis sheet"""
         # Only items with variance
-        variance_lines = [l for l in count_lines if l.get("variance", 0) != 0]
+        variance_lines = [
+            line_entry for line_entry in count_lines if line_entry.get("variance", 0) != 0
+        ]
 
         # Headers
         headers = [

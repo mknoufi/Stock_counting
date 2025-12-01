@@ -1,4 +1,4 @@
-module.exports = function(api) {
+module.exports = function (api) {
   api.cache(true);
   return {
     presets: ['babel-preset-expo'],
@@ -15,7 +15,30 @@ module.exports = function(api) {
       */
       // Removed react-native-dotenv - it conflicts with expo-router
       // Use EXPO_PUBLIC_* environment variables instead (built into Expo)
-      // Reanimated plugin must be listed last
+      [
+        'module-resolver',
+        {
+          root: ['./'],
+          alias: {
+            '@': './',
+          },
+          extensions: [
+            '.ios.ts',
+            '.android.ts',
+            '.ts',
+            '.ios.tsx',
+            '.android.tsx',
+            '.tsx',
+            '.jsx',
+            '.js',
+            '.json',
+            '.web.ts',
+            '.web.tsx',
+            '.web.js',
+          ],
+        },
+      ],
+      // Reanimated plugin includes worklets support and must be listed last
       'react-native-reanimated/plugin',
     ],
   };

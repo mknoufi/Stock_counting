@@ -121,10 +121,7 @@ export const SearchAutocomplete: React.FC<SearchAutocompleteProps> = ({
     const matchType = item.matchType;
 
     // Highlight matched text
-    const highlightName = item.item_name.replace(
-      new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
-      (match) => `|${match}|`
-    );
+
 
     return (
       <TouchableOpacity

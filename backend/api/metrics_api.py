@@ -55,13 +55,13 @@ async def get_metrics_json():
 @metrics_router.get("/health")
 async def get_health_metrics():
     """Get health status metrics with database status"""
-    from server import db, sql_connector
+    from server import db
 
     health_data = {
         "status": "healthy",
         "uptime": 0,
         "mongodb": {"status": "unknown"},
-        "dependencies": {"sql_server": {"status": "unknown"}},
+        "dependencies": {"sql_server": {"status": "disabled"}},
     }
 
     # Get monitoring service health if available
@@ -77,31 +77,16 @@ async def get_health_metrics():
         health_data["mongodb"] = {"status": "disconnected", "error": str(e)}
         health_data["status"] = "degraded"
 
-    # Check SQL Server
-    try:
-        sql_connected = sql_connector.test_connection()
-        health_data["dependencies"]["sql_server"] = {
-            "status": "healthy" if sql_connected else "unhealthy",
-            "connection": "active" if sql_connected else "failed",
-        }
-        if not sql_connected:
-            health_data["status"] = "degraded"
-    except Exception as e:
-        health_data["dependencies"]["sql_server"] = {
-            "status": "unhealthy",
-            "error": str(e),
-        }
-        health_data["status"] = "degraded"
-
     return {"success": True, "data": health_data}
 
 
 @metrics_router.get("/stats")
 async def get_metrics_stats():
     """Get system statistics and metrics"""
-    from server import db, sql_connector
     import time
+
     import psutil
+    from server import db
 
     stats = {
         "timestamp": time.time(),
@@ -111,7 +96,7 @@ async def get_metrics_stats():
             "disk_percent": psutil.disk_usage("/").percent,
         },
         "mongodb": {"status": "unknown"},
-        "sql_server": {"status": "unknown"},
+        "sql_server": {"status": "disabled"},
         "services": {},
     }
 
@@ -122,16 +107,6 @@ async def get_metrics_stats():
     except Exception as e:
         stats["mongodb"] = {"status": "disconnected", "error": str(e)}
 
-    # Check SQL Server
-    try:
-        sql_connected = sql_connector.test_connection()
-        stats["sql_server"] = {
-            "status": "connected" if sql_connected else "disconnected",
-            "connection": "active" if sql_connected else "inactive",
-        }
-    except Exception as e:
-        stats["sql_server"] = {"status": "disconnected", "error": str(e)}
-
     # Get monitoring service stats if available
     if _monitoring_service is not None:
         try:
@@ -141,3 +116,47 @@ async def get_metrics_stats():
             stats["services"] = {"error": str(e)}
 
     return {"success": True, "data": stats}
+
+
+@metrics_router.get("/staff-performance")
+async def get_staff_performance():
+    """Get staff performance metrics"""
+    from backend.server import db
+
+    # Aggregate items scanned per user
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$scanned_by",
+                "items_scanned": {"$sum": 1},
+                "last_scan": {"$max": "$timestamp"},
+            }
+        },
+        {"$sort": {"items_scanned": -1}},
+    ]
+
+    items_stats = await db.items.aggregate(pipeline).to_list(length=100)
+
+    # Aggregate variances found per user
+    variance_pipeline = [{"$group": {"_id": "$reported_by", "variances_found": {"$sum": 1}}}]
+
+    variance_stats = await db.variances.aggregate(variance_pipeline).to_list(length=100)
+    variance_map = {v["_id"]: v["variances_found"] for v in variance_stats}
+
+    # Combine data
+    performance_data = []
+    for stat in items_stats:
+        user_id = stat["_id"]
+        if not user_id:
+            continue
+
+        performance_data.append(
+            {
+                "user": user_id,
+                "items_scanned": stat["items_scanned"],
+                "variances_found": variance_map.get(user_id, 0),
+                "last_active": stat["last_scan"],
+            }
+        )
+
+    return {"success": True, "data": performance_data}

@@ -5,9 +5,9 @@ Automatically detects errors, broken functions, and provides recovery options
 
 import ast
 import logging
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class AutoErrorFinder:
             "warnings": len([i for i in self.issues if i.severity == "warning"]),
             "broken_functions": len(self.broken_functions),
             "issues": [self._issue_to_dict(i) for i in self.issues],
-            "broken_functions": [self._function_to_dict(bf) for bf in self.broken_functions],
+            "broken_function_details": [self._function_to_dict(bf) for bf in self.broken_functions],
         }
 
     def _scan_file(self, file_path: Path):

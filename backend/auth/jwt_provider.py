@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from authlib.jose import jwt as _jwt
-from authlib.jose.errors import JoseError, ExpiredTokenError
+from authlib.jose.errors import ExpiredTokenError, JoseError
 
 
 class ExpiredSignatureError(Exception):

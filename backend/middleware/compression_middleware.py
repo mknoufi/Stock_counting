@@ -4,11 +4,12 @@ High-performance compression for API responses
 """
 
 import gzip
+import logging
 from typing import Callable
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-import logging
 
 logger = logging.getLogger(__name__)
 

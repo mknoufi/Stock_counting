@@ -4,11 +4,11 @@ Decorators and utilities for automatic error diagnosis and self-healing
 """
 
 import logging
-from typing import Callable, Any, Optional, Dict, TypeVar, List
 from functools import wraps
+from typing import Any, Callable, Dict, List, Optional, TypeVar
 
-from backend.utils.result_types import Result
 from backend.services.auto_diagnosis import AutoDiagnosisService
+from backend.utils.result_types import Result
 
 logger = logging.getLogger(__name__)
 

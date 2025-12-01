@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Rect, Line, Text as SvgText, G } from 'react-native-svg';
 import { modernColors, modernTypography, modernSpacing } from '../../styles/modernDesignSystem';
 
@@ -178,4 +178,3 @@ const styles = StyleSheet.create({
     color: modernColors.text.secondary,
   },
 });
-

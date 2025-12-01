@@ -14,7 +14,7 @@ Context:
 
 Requirements:
 1. **Pure functions first**: Generate tests for discount calculation functions (no DB)
-2. **Test discount stacking**: 
+2. **Test discount stacking**:
    - Item % + invoice flat
    - Supplier scheme + item discount
    - Maximum discount cap

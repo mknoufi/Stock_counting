@@ -20,10 +20,10 @@ $ports = @(8000, 8001, 8002, 8003, 8004, 8005)
 foreach ($port in $ports) {
     $processes = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue |
                  Select-Object -ExpandProperty OwningProcess -Unique
-    foreach ($pid in $processes) {
+    foreach ($processId in $processes) {
         try {
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-            Write-Host "   Killed process on port $port (PID: $pid)" -ForegroundColor Gray
+            Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+            Write-Host "   Killed process on port $port (PID: $processId)" -ForegroundColor Gray
         } catch {}
     }
 }

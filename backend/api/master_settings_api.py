@@ -2,11 +2,12 @@
 Master Settings API - Centralized system configuration
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
-from typing import Optional
 import logging
 from datetime import datetime
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 
 try:
     from backend.auth.jwt import get_current_user

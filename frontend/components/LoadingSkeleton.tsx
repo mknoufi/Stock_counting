@@ -30,7 +30,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
     } else {
       progress.value = 0.25;
     }
-  }, []);
+  }, [progress]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: 0.3 + 0.4 * progress.value,

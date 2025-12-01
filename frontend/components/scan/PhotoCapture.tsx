@@ -19,7 +19,7 @@ interface PhotoCaptureProps {
   isWeb: boolean;
   serialPhotosRequired?: boolean;
   serialPhotoShortfall?: number;
-  photoCameraRef?: React.RefObject<CameraView>;
+  photoCameraRef?: React.RefObject<CameraView | null>;
   onPhotoTypeChange: (type: PhotoProofType) => void;
   onOpenPhotoCapture: () => void;
   onClosePhotoCapture: () => void;
@@ -346,4 +346,3 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
-

@@ -1,6 +1,6 @@
 /**
  * Card Component Stories
- * 
+ *
  * Documentation and examples for the Card component
  */
 
@@ -8,6 +8,29 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { Card } from './Card';
 import { View, Text, StyleSheet } from 'react-native';
 import { Button } from './Button';
+
+const styles = StyleSheet.create({
+  container: {
+    gap: 16,
+    padding: 20,
+  },
+  card: {
+    marginHorizontal: 0,
+  },
+  complexContent: {
+    gap: 12,
+  },
+  description: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'flex-end',
+  },
+});
 
 const meta: Meta<typeof Card> = {
   title: 'Components/Card',
@@ -122,8 +145,8 @@ export const ComplexContent: Story = {
           This card contains complex content including buttons and multiple text elements.
         </Text>
         <View style={styles.buttonRow}>
-          <Button title="Edit" variant="outline" size="small" onPress={() => {}} />
-          <Button title="Delete" variant="danger" size="small" onPress={() => {}} />
+          <Button title="Edit" variant="outline" size="small" onPress={() => { }} />
+          <Button title="Delete" variant="danger" size="small" onPress={() => { }} />
         </View>
       </View>
     ),
@@ -150,26 +173,4 @@ export const AllElevations: Story = {
   ),
 };
 
-const styles = StyleSheet.create({
-  container: {
-    gap: 16,
-    padding: 20,
-  },
-  card: {
-    marginHorizontal: 0,
-  },
-  complexContent: {
-    gap: 12,
-  },
-  description: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'flex-end',
-  },
-});
 

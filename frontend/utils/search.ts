@@ -1,3 +1,5 @@
+import { levenshteinDistance } from './algorithms';
+
 /**
  * Search Utility Functions
  * Provides fuzzy search and filtering capabilities
@@ -32,9 +34,20 @@ export const fuzzyMatch = (pattern: string, str: string): number => {
         }
     }
 
-    return patternIdx === patternLower.length
-        ? (score / pattern.length) * 50
-        : 0;
+    if (patternIdx === patternLower.length) {
+        return (score / pattern.length) * 50;
+    }
+
+    // Levenshtein distance check for typos
+    const distance = levenshteinDistance(strLower, patternLower);
+    const maxLen = Math.max(strLower.length, patternLower.length);
+
+    // If distance is small (e.g. <= 2 edits) and strings are reasonably long
+    if (distance <= 2 && maxLen > 3) {
+        return 55 - (distance * 5);
+    }
+
+    return 0;
 };
 
 interface SearchableItem {

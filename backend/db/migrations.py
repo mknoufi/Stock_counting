@@ -5,8 +5,9 @@ Handles database schema updates and indexing
 
 import logging
 from datetime import datetime
+from typing import Any, Dict, List
+
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,12 @@ class MigrationManager:
             await self.db.sessions.create_index([("warehouse", 1), ("status", 1)])
             await self.db.sessions.create_index([("staff_user", 1), ("status", 1)])
             await self.db.sessions.create_index([("status", 1), ("started_at", -1)])
+
+            # Additional performance indexes (recommended from CODEBASE_ANALYSIS.md)
+            await self.db.sessions.create_index([("created_at", -1)])  # For date range queries
+            await self.db.sessions.create_index(
+                [("status", 1), ("created_at", -1)]
+            )  # Compound for status + date
             logger.info("✓ Sessions indexes created")
 
             # Count lines collection indexes
@@ -108,6 +115,15 @@ class MigrationManager:
             await self.db.count_lines.create_index("counted_by")
             await self.db.count_lines.create_index([("counted_at", -1)])
             await self.db.count_lines.create_index("status")
+
+            # Additional performance indexes (recommended from CODEBASE_ANALYSIS.md)
+            await self.db.count_lines.create_index("verified")  # For verification status filtering
+            await self.db.count_lines.create_index(
+                [("item_code", 1), ("verified", 1)]
+            )  # Compound for item history
+            await self.db.count_lines.create_index(
+                [("verified", 1), ("counted_at", -1)]
+            )  # For verified items query
             logger.info("✓ Count lines indexes created")
 
             # ERP items collection indexes (for caching)
@@ -133,6 +149,16 @@ class MigrationManager:
             await self.db.erp_items.create_index([("floor", 1), ("rack", 1)])
             await self.db.erp_items.create_index([("verified", 1), ("verified_at", -1)])
             await self.db.erp_items.create_index([("category", 1), ("subcategory", 1)])
+
+            # Additional performance indexes (recommended from CODEBASE_ANALYSIS.md)
+            await self.db.erp_items.create_index("data_complete")  # For incomplete items query
+            await self.db.erp_items.create_index([("last_synced", -1)])  # For sync status queries
+            await self.db.erp_items.create_index(
+                [("warehouse", 1), ("data_complete", 1)]
+            )  # Compound for filtering
+            await self.db.erp_items.create_index(
+                [("category", 1), ("data_complete", 1)]
+            )  # Compound for filtering
             # Text index for full-text search (MongoDB requires special syntax)
             # Check if text index already exists before creating
             try:
@@ -170,6 +196,20 @@ class MigrationManager:
             # Note: _id is already unique by default in MongoDB, can't add unique again
             await self.db.erp_sync_metadata.create_index("_id")
             logger.info("✓ Sync metadata indexes created")
+
+            # Activity logs collection indexes (recommended from CODEBASE_ANALYSIS.md)
+            try:
+                await self.db.activity_logs.create_index(
+                    [("created_at", -1)]
+                )  # For time-based queries
+                await self.db.activity_logs.create_index("user_id")  # For user activity queries
+                await self.db.activity_logs.create_index(
+                    [("user_id", 1), ("created_at", -1)]
+                )  # Compound index
+                await self.db.activity_logs.create_index("action")  # For action filtering
+                logger.info("✓ Activity logs indexes created")
+            except Exception as e:
+                logger.warning(f"Error creating activity logs indexes: {str(e)}")
 
             logger.info("All database indexes created successfully")
 

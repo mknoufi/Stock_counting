@@ -1,47 +1,93 @@
+#!/usr/bin/env python3
 """
-Secure Secret Generator
-Generates secure JWT secrets on first run
+Secret Generator Utility
+
+Generates secure secrets for JWT_SECRET and JWT_REFRESH_SECRET.
+Can optionally write them to the .env file.
 """
 
 import secrets
+import argparse
 import os
 from pathlib import Path
 
 
-def generate_secrets():
-    """Generate secure secrets on first run"""
-    # Get project root (backend's parent)
-    backend_dir = Path(__file__).parent.parent
-    project_root = backend_dir.parent
-    secrets_file = project_root / ".secrets"
+def generate_secret(length=64):
+    """Generate a URL-safe text secret of approximately 'length' characters."""
+    # 48 bytes -> ~64 chars in base64/urlsafe
+    return secrets.token_urlsafe(48)
 
-    if secrets_file.exists():
-        print("✅ Secrets file already exists. Skipping generation.")
-        return
 
-    # Generate secure secrets
-    jwt_secret = secrets.token_urlsafe(32)
-    jwt_refresh_secret = secrets.token_urlsafe(32)
+def update_env_file(env_path, jwt_secret, jwt_refresh_secret):
+    """Update or create .env file with new secrets."""
+    env_path = Path(env_path)
 
-    # Write secrets to file
-    with open(secrets_file, "w") as f:
-        f.write("# Auto-generated secure secrets\n")
-        f.write("# DO NOT COMMIT THIS FILE TO GIT\n")
-        f.write(f"# Generated: {os.popen('date').read().strip()}\n\n")
-        f.write(f"JWT_SECRET={jwt_secret}\n")
-        f.write(f"JWT_REFRESH_SECRET={jwt_refresh_secret}\n")
+    if env_path.exists():
+        print(f"Updating existing .env file at {env_path}")
+        content = env_path.read_text(encoding="utf-8")
+        lines = content.splitlines()
 
-    # Secure file permissions (Unix only)
-    if os.name != "nt":
-        os.chmod(secrets_file, 0o600)
-        print(f"✅ Secure secrets generated in {secrets_file}")
-        print("✅ File permissions set to 600 (owner read/write only)")
+        new_lines = []
+        jwt_secret_set = False
+        jwt_refresh_set = False
+
+        for line in lines:
+            if line.startswith("JWT_SECRET="):
+                new_lines.append(f"JWT_SECRET={jwt_secret}")
+                jwt_secret_set = True
+            elif line.startswith("JWT_REFRESH_SECRET="):
+                new_lines.append(f"JWT_REFRESH_SECRET={jwt_refresh_secret}")
+                jwt_refresh_set = True
+            else:
+                new_lines.append(line)
+
+        if not jwt_secret_set:
+            new_lines.append(f"JWT_SECRET={jwt_secret}")
+        if not jwt_refresh_set:
+            new_lines.append(f"JWT_REFRESH_SECRET={jwt_refresh_secret}")
+
+        env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
     else:
-        print(f"✅ Secure secrets generated in {secrets_file}")
+        print(f"Creating new .env file at {env_path}")
+        content = f"""# Security Secrets
+JWT_SECRET={jwt_secret}
+JWT_REFRESH_SECRET={jwt_refresh_secret}
+"""
+        env_path.write_text(content, encoding="utf-8")
 
-    print("⚠️  IMPORTANT: Add .secrets to .gitignore if not already present!")
-    print("⚠️  IMPORTANT: Never commit this file to version control!")
+    print("✅ .env file updated successfully")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate secure secrets for Stock Verify App")
+    parser.add_argument("--write", action="store_true", help="Write secrets to .env file")
+    parser.add_argument("--env-file", default=".env", help="Path to .env file (default: .env)")
+
+    args = parser.parse_args()
+
+    print("🔐 Generating secure secrets...")
+    jwt_secret = generate_secret()
+    jwt_refresh_secret = generate_secret()
+
+    print("\nGenerated Secrets:")
+    print("-" * 60)
+    print(f"JWT_SECRET={jwt_secret}")
+    print(f"JWT_REFRESH_SECRET={jwt_refresh_secret}")
+    print("-" * 60)
+
+    if args.write:
+        # Look for .env in current dir or backend dir
+        env_path = Path(args.env_file)
+        if not env_path.exists() and (Path("backend") / ".env").exists():
+            env_path = Path("backend") / ".env"
+
+        update_env_file(env_path, jwt_secret, jwt_refresh_secret)
+    else:
+        print("\nTo use these secrets:")
+        print("1. Copy the values above")
+        print("2. Paste them into your backend/.env file")
+        print("   OR run this script with --write to update automatically")
 
 
 if __name__ == "__main__":
-    generate_secrets()
+    main()

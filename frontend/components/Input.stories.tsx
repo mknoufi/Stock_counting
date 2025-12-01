@@ -1,6 +1,6 @@
 /**
  * Input Component Stories
- * 
+ *
  * Documentation and examples for the Input component
  */
 
@@ -92,20 +92,23 @@ export const WithLeftIcon: Story = {
 // With Right Icon
 export const WithRightIcon: Story = {
   render: () => {
-    const [value, setValue] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-    
-    return (
-      <Input
-        label="Password"
-        placeholder="Enter password"
-        secureTextEntry={!showPassword}
-        value={value}
-        onChangeText={setValue}
-        rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
-        onRightIconPress={() => setShowPassword(!showPassword)}
-      />
-    );
+    const PasswordInput = () => {
+      const [value, setValue] = useState('');
+      const [showPassword, setShowPassword] = useState(false);
+
+      return (
+        <Input
+          label="Password"
+          placeholder="Enter password"
+          secureTextEntry={!showPassword}
+          value={value}
+          onChangeText={setValue}
+          rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+          onRightIconPress={() => setShowPassword(!showPassword)}
+        />
+      );
+    };
+    return <PasswordInput />;
   },
 };
 
@@ -169,4 +172,3 @@ const styles = StyleSheet.create({
     padding: 20,
   },
 });
-

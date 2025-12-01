@@ -33,7 +33,7 @@ export default function MasterSettingsScreen() {
       return;
     }
     loadSettings();
-  }, []);
+  }, [hasRole, router]);
 
   const loadSettings = async () => {
     try {

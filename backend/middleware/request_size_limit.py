@@ -3,11 +3,12 @@ Request Size Limit Middleware
 Prevents DOS attacks via large request payloads
 """
 
+import logging
+
+from fastapi import status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from fastapi import status
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.max_size = max_size
         self.exempt_paths = exempt_paths or ["/health"]
-        logger.info(f"Request size limit: {max_size / (1024*1024):.1f} MB")
+        logger.info(f"Request size limit: {max_size / (1024 * 1024):.1f} MB")
 
     async def dispatch(self, request: Request, call_next):
         # Skip size check for exempt paths (like health checks)

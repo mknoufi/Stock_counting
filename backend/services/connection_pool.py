@@ -3,13 +3,15 @@ Connection Pool Service - SQL Server Connection Pooling
 Handles multiple concurrent connections efficiently
 """
 
-import pyodbc
-import threading
-from queue import Queue, Empty
-from typing import Optional, Dict, Any
 import logging
-from contextlib import contextmanager
+import threading
 import time
+from contextlib import contextmanager
+from queue import Empty, Full, Queue
+from typing import Any, Dict, Optional
+
+import pyodbc
+
 from ..utils.db_connection import SQLServerConnectionBuilder
 
 logger = logging.getLogger(__name__)
@@ -44,8 +46,8 @@ class SQLServerConnectionPool:
         self.recycle = recycle
 
         self._pool: Queue = Queue(maxsize=pool_size + max_overflow)
-        self._checked_out: set = set()
-        self._created: int = 0
+        self._checked_out: Dict[int, float] = {}  # Track checkout time
+        self._active_connections: int = 0
         self._lock = threading.Lock()
 
         # Pre-create initial connections
@@ -59,7 +61,7 @@ class SQLServerConnectionPool:
             port=self.port,
             user=self.user,
             password=self.password,
-            timeout=self.timeout
+            timeout=self.timeout,
         )
 
     def _create_connection(self) -> pyodbc.Connection:
@@ -83,28 +85,73 @@ class SQLServerConnectionPool:
                 cursor.execute("SET QUOTED_IDENTIFIER ON")
                 # Optimize for faster queries
                 cursor.execute("SET NOCOUNT ON")  # Reduces network traffic
-            except Exception as e:
+            except pyodbc.Error as e:
                 logger.debug(f"Could not set connection attributes: {str(e)}")
             finally:
                 cursor.close()
 
-            logger.debug(f"Created optimized connection. Pool size: {self._created}")
+            logger.debug(f"Created optimized connection. Pool size: {self._active_connections}")
             return conn
-        except Exception as e:
+        except pyodbc.Error as e:
             logger.error(f"Failed to create connection: {str(e)}")
             raise
 
     def _initialize_pool(self):
-        """Pre-create initial connections"""
-        initial_size = min(self.pool_size, 3)  # Start with 3 connections
-        for _ in range(initial_size):
-            try:
+        """Initialize the pool with minimum connections."""
+        try:
+            for _ in range(self.pool_size):
                 conn = self._create_connection()
                 self._pool.put((conn, time.time()))
                 with self._lock:
-                    self._created += 1
-            except Exception as e:
-                logger.warning(f"Failed to pre-create connection: {str(e)}")
+                    self._active_connections += 1
+            logger.info(f"Initialized pool with {self.pool_size} connections")
+        except Exception as e:
+            logger.error(f"Failed to initialize pool: {str(e)}")
+
+    def _create_and_track_connection(self) -> pyodbc.Connection:
+        """Creates a new connection and updates pool statistics."""
+        conn = self._create_connection()
+        with self._lock:
+            self._active_connections += 1
+            self._checked_out[id(conn)] = time.time()
+        return conn
+
+    def _discard_connection(self, conn: pyodbc.Connection):
+        """Safely closes a connection and decrements active count."""
+        try:
+            conn.close()
+        except Exception:
+            pass
+        finally:
+            with self._lock:
+                if id(conn) in self._checked_out:
+                    del self._checked_out[id(conn)]
+                if self._active_connections > 0:
+                    self._active_connections -= 1
+
+    def _validate_and_refresh(self, conn: pyodbc.Connection, created_at: float) -> pyodbc.Connection:
+        """
+        Validates a pooled connection.
+        If invalid or expired, discards it and creates a new one.
+        """
+        age = time.time() - created_at
+        
+        # Check if recycle is needed
+        if self.recycle and age > self.recycle:
+            logger.info(f"Recycling connection (age: {age:.1f}s)")
+            self._discard_connection(conn)
+            return self._create_and_track_connection()
+
+        # Check validity
+        if not self._is_connection_valid(conn):
+            logger.warning("Pooled connection invalid, creating new one")
+            self._discard_connection(conn)
+            return self._create_and_track_connection()
+
+        # Connection is good, mark as checked out
+        with self._lock:
+            self._checked_out[id(conn)] = time.time()
+        return conn
 
     def _is_connection_valid(self, conn: pyodbc.Connection) -> bool:
         """Check if connection is still valid using shared utility"""
@@ -118,43 +165,13 @@ class SQLServerConnectionPool:
             try:
                 # Try to get from pool
                 conn, created_at = self._pool.get_nowait()
-
-                # Check if connection is still valid and not too old
-                age = time.time() - created_at
-                if age > self.recycle:
-                    try:
-                        conn.close()
-                    except Exception:
-                        pass
-                    # Create new connection
-                    conn = self._create_connection()
-                    with self._lock:
-                        self._created += 1
-
-                elif not self._is_connection_valid(conn):
-                    # Connection is dead, create new one
-                    try:
-                        conn.close()
-                    except Exception:
-                        pass
-                    conn = self._create_connection()
-                    with self._lock:
-                        self._created += 1
-
-                # Mark as checked out
-                with self._lock:
-                    self._checked_out.add(id(conn))
-
-                return conn
+                return self._validate_and_refresh(conn, created_at)
 
             except Empty:
                 # Pool is empty, try to create new connection if under limit
                 with self._lock:
-                    if self._created < self.pool_size + self.max_overflow:
-                        conn = self._create_connection()
-                        self._created += 1
-                        self._checked_out.add(id(conn))
-                        return conn
+                    if self._active_connections < self.pool_size + self.max_overflow:
+                        return self._create_and_track_connection()
 
                 # Use exponential backoff to reduce CPU usage under high load
                 wait_time = min(0.05 * (2 ** min(5, int((deadline - time.time()) / 0.1))), 0.5)
@@ -171,28 +188,18 @@ class SQLServerConnectionPool:
             if conn_id not in self._checked_out:
                 logger.warning("Attempted to return connection not checked out")
                 return
-            self._checked_out.remove(conn_id)
+            del self._checked_out[conn_id]
 
         # Check if connection is still valid before returning
         if self._is_connection_valid(conn):
             try:
                 self._pool.put_nowait((conn, time.time()))
-            except Exception as e:
-                logger.error(f"Failed to return connection to pool: {str(e)}")
-                try:
-                    conn.close()
-                except Exception:
-                    pass
-                with self._lock:
-                    self._created -= 1
+            except Full:
+                logger.warning("Pool full, discarding returned connection")
+                self._discard_connection(conn)
         else:
             # Connection is dead, close it
-            try:
-                conn.close()
-            except Exception:
-                pass
-            with self._lock:
-                self._created -= 1
+            self._discard_connection(conn)
 
     @contextmanager
     def get_connection(self, timeout: Optional[float] = None):
@@ -218,12 +225,12 @@ class SQLServerConnectionPool:
             try:
                 conn, _ = self._pool.get_nowait()
                 conn.close()
-            except Exception:
+            except (Empty, pyodbc.Error):
                 pass
 
         with self._lock:
             self._checked_out.clear()
-            self._created = 0
+            self._active_connections = 0
 
     def get_stats(self) -> Dict[str, Any]:
         """Get pool statistics"""
@@ -231,7 +238,7 @@ class SQLServerConnectionPool:
             return {
                 "pool_size": self.pool_size,
                 "max_overflow": self.max_overflow,
-                "created": self._created,
+                "active_connections": self._active_connections,
                 "available": self._pool.qsize(),
                 "checked_out": len(self._checked_out),
                 "utilization": (

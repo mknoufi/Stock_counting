@@ -3,20 +3,30 @@ Admin Control Panel API
 Provides endpoints for service management, status monitoring, and system control
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse, Response
-from typing import Dict, Any, Optional, Callable, Iterable, Tuple, List, TypedDict
-import logging
-from datetime import datetime, timedelta
-import psutil
-import io
+# ruff: noqa: E402
+import sys
+from pathlib import Path
 
-from backend.utils.service_manager import ServiceManager
-from backend.utils.port_detector import PortDetector
-from backend.services.system_report_service import SystemReportService
+# Add project root to path for direct execution (debugging)
+# This allows the file to be run directly for testing/debugging
+project_root = Path(__file__).parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+import io  # noqa: E402
+import logging  # noqa: E402
+from datetime import datetime, timedelta  # noqa: E402
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, TypedDict  # noqa: E402
+
+import psutil  # noqa: E402
+from fastapi import APIRouter, Depends, HTTPException, status  # noqa: E402
+from fastapi.responses import Response, StreamingResponse  # noqa: E402
 
 # Import auth
-from backend.auth import get_current_user
+from backend.auth import get_current_user  # noqa: E402
+from backend.services.system_report_service import SystemReportService  # noqa: E402
+from backend.utils.port_detector import PortDetector  # noqa: E402
+from backend.utils.service_manager import ServiceManager  # noqa: E402
 
 # Constants
 BACKEND_PROCESS_NEEDLE = "server.py"
@@ -141,51 +151,14 @@ def _get_mongodb_status() -> ServiceStatus:
 
 
 def _test_sql_connection() -> Optional[bool]:
-    try:
-        from backend.sql_server_connector import SQLServerConnector
-        from backend.config import settings
-    except Exception:
-        return None
-    if not settings.SQL_SERVER_HOST:
-        return None
-    connector = SQLServerConnector()
-    try:
-        connector.connect(
-            host=settings.SQL_SERVER_HOST,
-            port=settings.SQL_SERVER_PORT,
-            database=settings.SQL_SERVER_DATABASE or "",
-            user=settings.SQL_SERVER_USER,
-            password=settings.SQL_SERVER_PASSWORD,
-        )
-        return connector.test_connection()
-    except Exception:
-        return False
+    return False
 
 
 def _get_sql_server_status() -> ServiceStatus:
-    try:
-        from backend.config import settings
-    except Exception:
-        return {
-            "running": None,
-            "port": None,
-            "status": "not_configured",
-        }
-
-    is_connected = _test_sql_connection()
-    port_value = _safe_int(settings.SQL_SERVER_PORT)
-    if is_connected is None:
-        return {
-            "running": None,
-            "port": port_value,
-            "status": "not_configured",
-        }
-
-    status_str = "connected" if is_connected else "disconnected"
     return {
-        "running": bool(is_connected),
-        "port": port_value,
-        "status": status_str,
+        "running": False,
+        "port": None,
+        "status": "disabled",
     }
 
 
@@ -246,16 +219,7 @@ def _collect_system_issues() -> List[Dict[str, Any]]:
         issues.append(_format_issue("mongodb", "MongoDB is not running"))
     if not _is_any_port_in_use(BACKEND_PORTS):
         issues.append(_format_issue("backend", "Backend server is not running"))
-    sql_connection_status = _test_sql_connection()
-    if sql_connection_status is False:
-        issues.append(
-            _format_issue(
-                "sql_server",
-                "SQL Server connection unavailable",
-                severity="medium",
-                issue_type="warning",
-            )
-        )
+
     return issues
 
 
@@ -307,7 +271,9 @@ def _determine_health_status(score: float) -> str:
     return "critical"
 
 
-def _build_health_payload(score: float, running_critical: int, running_optional: int, critical_issues: int) -> Dict[str, Any]:
+def _build_health_payload(
+    score: float, running_critical: int, running_optional: int, critical_issues: int
+) -> Dict[str, Any]:
     return {
         "score": round(score, 1),
         "status": _determine_health_status(score),
@@ -613,6 +579,7 @@ async def generate_report(
     """Generate a report"""
     try:
         from server import db
+
         service = SystemReportService(db)
 
         data = await service.generate_report(report_id, start_date, end_date, format)
@@ -627,13 +594,17 @@ async def generate_report(
             return Response(
                 content=data,
                 media_type="text/csv",
-                headers={"Content-Disposition": f"attachment; filename={report_id}_{datetime.now().strftime('%Y%m%d')}.csv"}
+                headers={
+                    "Content-Disposition": f"attachment; filename={report_id}_{datetime.now().strftime('%Y%m%d')}.csv"
+                },
             )
         elif format == "excel":
             return StreamingResponse(
                 io.BytesIO(data),
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                headers={"Content-Disposition": f"attachment; filename={report_id}_{datetime.now().strftime('%Y%m%d')}.xlsx"}
+                headers={
+                    "Content-Disposition": f"attachment; filename={report_id}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+                },
             )
 
     except Exception as e:
@@ -692,7 +663,7 @@ async def get_service_logs(
                 {
                     "timestamp": datetime.now().isoformat(),
                     "level": "INFO",
-                    "message": "SQL Server connection test successful",
+                    "message": "SQL Server connection is disabled.",
                 },
             ]
 
@@ -723,25 +694,8 @@ async def get_service_logs(
 @admin_control_router.get("/sql-server/config")
 async def get_sql_server_config(current_user: dict = Depends(require_admin)):
     """Get SQL Server configuration"""
-    try:
-        from backend.config import settings
+    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="SQL Server integration is disabled.")
 
-        config = {
-            "host": settings.SQL_SERVER_HOST,
-            "port": settings.SQL_SERVER_PORT,
-            "database": settings.SQL_SERVER_DATABASE,
-            "username": settings.SQL_SERVER_USER,
-            "password_set": bool(settings.SQL_SERVER_PASSWORD),
-            "configured": bool(settings.SQL_SERVER_HOST),
-        }
-
-        return {"success": True, "data": config}
-    except Exception as e:
-        logger.error(f"Error getting SQL config: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get SQL config: {str(e)}",
-        )
 
 
 @admin_control_router.post("/sql-server/config")
@@ -749,20 +703,7 @@ async def update_sql_server_config(
     config: Dict[str, Any], current_user: dict = Depends(require_admin)
 ):
     """Update SQL Server configuration"""
-    try:
-        # This would update the configuration
-        # In production, save to config file or database
-        return {
-            "success": True,
-            "message": "SQL Server configuration updated. Restart backend to apply changes.",
-            "data": config,
-        }
-    except Exception as e:
-        logger.error(f"Error updating SQL config: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update SQL config: {str(e)}",
-        )
+    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="SQL Server integration is disabled.")
 
 
 @admin_control_router.post("/sql-server/test")
@@ -770,49 +711,7 @@ async def test_sql_server_connection(
     config: Optional[Dict[str, Any]] = None, current_user: dict = Depends(require_admin)
 ):
     """Test SQL Server connection"""
-    try:
-        from backend.sql_server_connector import SQLServerConnector
-        from backend.config import settings
-
-        # Use provided config or current settings
-        connector = SQLServerConnector()
-        try:
-            if config:
-                connector.connect(
-                    host=config.get("host", ""),
-                    port=config.get("port", 1433),
-                    database=config.get("database", ""),
-                    user=config.get("username"),
-                    password=config.get("password"),
-                )
-            else:
-                connector.connect(
-                    host=settings.SQL_SERVER_HOST or "",
-                    port=settings.SQL_SERVER_PORT,
-                    database=settings.SQL_SERVER_DATABASE or "",
-                    user=settings.SQL_SERVER_USER,
-                    password=settings.SQL_SERVER_PASSWORD,
-                )
-            is_connected = connector.test_connection()
-        except Exception:
-            is_connected = False
-
-        return {
-            "success": True,
-            "data": {
-                "connected": is_connected,
-                "message": "Connection successful" if is_connected else "Connection failed",
-            },
-        }
-    except Exception as e:
-        logger.error(f"Error testing SQL connection: {e}")
-        return {
-            "success": False,
-            "data": {
-                "connected": False,
-                "message": f"Connection test failed: {str(e)}",
-            },
-        }
+    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="SQL Server integration is disabled.")
 
 
 @admin_control_router.get("/system/health-score")
@@ -832,7 +731,9 @@ async def get_system_health_score(current_user: dict = Depends(require_admin)):
 
         return {
             "success": True,
-            "data": _build_health_payload(final_score, running_critical, running_optional, critical_issues),
+            "data": _build_health_payload(
+                final_score, running_critical, running_optional, critical_issues
+            ),
         }
     except Exception as e:
         logger.error(f"Error calculating health score: {e}")

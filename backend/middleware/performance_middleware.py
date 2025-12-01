@@ -2,12 +2,13 @@
 Performance Middleware - Track request performance and add caching headers
 """
 
-import time
 import logging
+import time
+from typing import Callable
+
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
-from typing import Callable
 
 try:
     from services.monitoring_service import MonitoringService

@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform, Pressable } from 'react-native';
 import { flags } from '../constants/flags';
-import { toggleHighContrast } from '../theme/Provider';
 import { useAuthStore } from '../store/authStore';
 import { useNetworkStore } from '../services/networkService';
 import { getBackendURL } from '../utils/backendUrl';
@@ -49,11 +48,7 @@ export const DebugPanel: React.FC = () => {
           </Pressable>
         </>
       )}
-      {flags.enableUnistyles && (
-        <Pressable style={styles.button} onPress={toggleHighContrast} pointerEvents="auto">
-          <Text style={styles.buttonText}>Toggle Contrast Theme</Text>
-        </Pressable>
-      )}
+
     </View>
   );
 };

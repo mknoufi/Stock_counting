@@ -5,11 +5,12 @@ Designed for high reliability and clear error tracking.
 
 from __future__ import annotations
 
+import logging
 import traceback
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar, cast
 from functools import wraps
-import logging
+from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar, cast, Literal
+
 
 # Type variables for generic typing
 T = TypeVar("T")
@@ -66,9 +67,10 @@ class Result(Generic[T, E]):
         elif hasattr(self, "_error"):
             object.__setattr__(self, "_is_success", False)
             if not hasattr(self, "_traceback") or self._traceback is None:
+                error = cast(Exception, self._error)
                 tb = "".join(
                     traceback.format_exception(
-                        type(self._error), self._error, self._error.__traceback__
+                        type(error), error, getattr(error, "__traceback__", None)
                     )
                 )
                 object.__setattr__(self, "_traceback", tb)
@@ -114,10 +116,10 @@ class Result(Generic[T, E]):
         try:
             return cls.ok(func(*args, **kwargs))
         except error_type as e:
-            return cls.fail(e)  # type: ignore
+            return cls.fail(e)
         except Exception as e:
             logger.exception("Unexpected error in from_callable")
-            return cls.fail(error_type(f"Unexpected error: {str(e)}"))  # type: ignore
+            return cls.fail(error_type(f"Unexpected error: {str(e)}"))
 
     @property
     def is_ok(self) -> bool:
@@ -197,9 +199,9 @@ class Result(Generic[T, E]):
 
     def to_optional(self) -> Optional[T]:
         """Convert to Optional[T], returning None on error."""
-        return cast(Optional[T], self._value) if self.is_ok else None
+        return self._value if self.is_ok else None
 
-    def to_either(self) -> "Either[T, E]":
+    def to_either(self) -> "Either[E, T]":
         """Convert to an Either type (Right=success, Left=error)."""
         if self.is_ok:
             return Right(cast(T, self._value))
@@ -217,7 +219,7 @@ class Result(Generic[T, E]):
     def __enter__(self) -> "Result[T, E]":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+    def __exit__(self, exc_type, exc_val, exc_tb) -> Literal[False]:
         # When a failed Result is used as a context manager we surface the original
         # exception instead of the UnwrapError wrapper to keep error expectations
         # backwards compatible with legacy tests.
@@ -308,3 +310,110 @@ def result_function(
         return wrapper
 
     return decorator
+
+
+# API Response Helpers
+try:  # noqa: C901
+    from fastapi import HTTPException
+    from typing import Any as AnyType, Coroutine
+
+    F_Async = TypeVar("F_Async", bound=Callable[..., Coroutine[AnyType, AnyType, AnyType]])
+
+    ERROR_STATUS_MAP = {
+        "AuthenticationError": 401,
+        "AuthorizationError": 403,
+        "ValidationError": 422,
+        "NotFoundError": 404,
+        "RateLimitExceededError": 429,
+    }
+
+    def _get_status_code(error_name: str) -> int:
+        for key, code in ERROR_STATUS_MAP.items():
+            if key in error_name:
+                return code
+        return 500
+
+    def handle_result(result: Result[T, E], success_status: int = 200) -> Dict[str, Any]:
+        """Convert a Result type to a proper API response."""
+        if result.is_ok:
+            return {"success": True, "data": result.unwrap(), "error": None}
+
+        # Try common error attributes for Result
+        error = getattr(result, "err", None) or getattr(result, "_error", None)
+        if error is None:
+            logger.error("Result has no error attribute - this should not happen")
+            error = Exception("Unknown error")
+
+        # Check for specific error types
+        error_name = error.__class__.__name__
+        status_code = _get_status_code(error_name)
+
+        if status_code == 500:
+            # Log unexpected errors
+            import uuid
+
+            error_id = str(uuid.uuid4())
+            logger.error(
+                f"Unexpected error (ID: {error_id}): {str(error)}\n"
+                f"Type: {type(error).__name__}\n"
+                f"Traceback: {getattr(error, '__traceback__', 'No traceback')}"
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "success": False,
+                    "error": {
+                        "message": "An unexpected error occurred",
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "error_id": error_id,
+                        "details": {
+                            "error_type": type(error).__name__,
+                            "error_message": str(error),
+                        },
+                    },
+                },
+            )
+
+        raise HTTPException(
+            status_code=status_code,
+            detail={
+                "success": False,
+                "error": {
+                    "message": str(error),
+                    "code": error_name,
+                    "details": getattr(error, "details", {}),
+                },
+            },
+        )
+
+    def result_to_response(success_status: int = 200) -> Callable[[F_Async], F_Async]:
+        """
+        Decorator to convert Result types to API responses
+
+        Args:
+            success_status: HTTP status code for successful responses
+
+        Returns:
+            Decorated function that returns API-compatible responses
+        """
+
+        def decorator(func: F_Async) -> F_Async:
+            @wraps(func)
+            async def wrapper(*args: AnyType, **kwargs: AnyType) -> Dict[str, Any] | Any:
+                try:
+                    result = await func(*args, **kwargs)
+                    if isinstance(result, Result):
+                        return handle_result(result, success_status)
+                    return result
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    # Convert unhandled exceptions to Result and then to API response
+                    return handle_result(Fail(e), 500)
+
+            return cast(F_Async, wrapper)
+
+        return decorator
+
+except ImportError:
+    pass  # FastAPI not installed or not needed in this context

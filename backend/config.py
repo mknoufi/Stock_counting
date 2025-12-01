@@ -7,8 +7,8 @@ import logging
 import os
 
 try:
+    from pydantic_settings import BaseSettings as PydanticBaseSettings
     from pydantic_settings import (
-        BaseSettings as PydanticBaseSettings,
         SettingsConfigDict,
     )
 
@@ -16,18 +16,19 @@ try:
 except ImportError:
     HAS_PYDANTIC_V2 = False
     try:
-        from pydantic import BaseSettings as PydanticBaseSettings
+        from pydantic import BaseSettings as PydanticBaseSettings  # type: ignore[no-redef]
     except (
         ImportError
     ) as exc:  # pragma: no cover - configuration import should succeed in production
         raise ImportError(
             "Please install pydantic or pydantic-settings before running the backend"
         ) from exc
-    SettingsConfigDict = None  # type: ignore[assignment]
+    SettingsConfigDict = dict  # type: ignore[assignment,misc]
+
+from pathlib import Path
+from typing import Optional
 
 from pydantic import Field, validator
-from typing import Optional
-from pathlib import Path
 
 ROOT_DIR = Path(__file__).parent
 
@@ -35,7 +36,7 @@ ROOT_DIR = Path(__file__).parent
 logger = logging.getLogger(__name__)
 
 
-class Settings(PydanticBaseSettings):  # type: ignore[misc]
+class Settings(PydanticBaseSettings):
     """Application settings with validation"""
 
     if HAS_PYDANTIC_V2:
@@ -44,7 +45,7 @@ class Settings(PydanticBaseSettings):  # type: ignore[misc]
             env_file_encoding="utf-8",
             case_sensitive=True,
             extra="ignore",
-        )  # type: ignore[call-arg]
+        )
     else:  # pragma: no cover - legacy pydantic v1 behaviour
 
         class Config:
@@ -72,7 +73,7 @@ class Settings(PydanticBaseSettings):  # type: ignore[misc]
         # Auto-detect port
         if v == "mongodb://localhost:27017":
             try:
-                from utils.port_detector import PortDetector
+                from backend.utils.port_detector import PortDetector
 
                 v = PortDetector.get_mongo_url()
                 logger.info(f"Auto-detected MongoDB URL: {v}")
@@ -106,8 +107,13 @@ class Settings(PydanticBaseSettings):  # type: ignore[misc]
     # Security
     # CRITICAL: These MUST be set via environment variables - no defaults allowed
     # Generate secure secrets using: python -c "import secrets; print(secrets.token_urlsafe(32))"
-    JWT_SECRET: Optional[str] = Field(default=None, description="JWT signing secret - must be set via JWT_SECRET env var")
-    JWT_REFRESH_SECRET: Optional[str] = Field(default=None, description="JWT refresh token secret - must be set via JWT_REFRESH_SECRET env var")
+    JWT_SECRET: Optional[str] = Field(
+        default=None, description="JWT signing secret - must be set via JWT_SECRET env var"
+    )
+    JWT_REFRESH_SECRET: Optional[str] = Field(
+        default=None,
+        description="JWT refresh token secret - must be set via JWT_REFRESH_SECRET env var",
+    )
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(15, ge=1)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(30, ge=1)
@@ -123,7 +129,9 @@ class Settings(PydanticBaseSettings):  # type: ignore[misc]
         if env_value:
             v = env_value
         elif v is None:
-            raise ValueError("JWT_SECRET is required and must be set via JWT_SECRET environment variable")
+            raise ValueError(
+                "JWT_SECRET is required and must be set via JWT_SECRET environment variable"
+            )
 
         if not v:
             raise ValueError("JWT_SECRET cannot be empty")
@@ -134,7 +142,7 @@ class Settings(PydanticBaseSettings):  # type: ignore[misc]
             "lavanya-emart-secret-key-2025-change-in-production",
             "REPLACE_WITH_A_SECURE_64_CHAR_SECRET",
             "your-secret-key-here",
-            "change-me-in-production"
+            "change-me-in-production",
         }
         if v in insecure_secrets:
             raise ValueError(
@@ -150,7 +158,9 @@ class Settings(PydanticBaseSettings):  # type: ignore[misc]
         if env_value:
             v = env_value
         elif v is None:
-            raise ValueError("JWT_REFRESH_SECRET is required and must be set via JWT_REFRESH_SECRET environment variable")
+            raise ValueError(
+                "JWT_REFRESH_SECRET is required and must be set via JWT_REFRESH_SECRET environment variable"
+            )
 
         if not v:
             raise ValueError("JWT_REFRESH_SECRET cannot be empty")
@@ -161,7 +171,7 @@ class Settings(PydanticBaseSettings):  # type: ignore[misc]
             "lavanya-emart-refresh-secret-key-2025-change-in-production",
             "REPLACE_WITH_A_SECURE_64_CHAR_REFRESH_SECRET",
             "your-refresh-secret-key-here",
-            "change-me-in-production"
+            "change-me-in-production",
         }
         if v in insecure_secrets:
             raise ValueError(
@@ -219,10 +229,10 @@ class Settings(PydanticBaseSettings):  # type: ignore[misc]
     CORS_ALLOW_ORIGINS: Optional[str] = None
     CORS_DEV_ORIGINS: Optional[str] = Field(
         None,
-        description="Additional CORS origins for development (comma-separated). Defaults include localhost variants."
+        description="Additional CORS origins for development (comma-separated). Defaults include localhost variants.",
     )
     HOST: str = "0.0.0.0"
-    PORT: int = Field(8000, ge=1, le=65535)
+    PORT: int = Field(8001, ge=1, le=65535)
     WORKERS: int = Field(1, ge=1)
 
     @validator("PORT")
@@ -236,21 +246,26 @@ class Settings(PydanticBaseSettings):  # type: ignore[misc]
     METRICS_HISTORY_SIZE: int = Field(1000, ge=0)
 
     # Enhanced Connection Pool Settings
-    CONNECTION_RETRY_ATTEMPTS: int = Field(3, ge=1, le=10, description="Number of retry attempts for connection creation")
-    CONNECTION_RETRY_DELAY: float = Field(1.0, ge=0.1, le=10.0, description="Initial retry delay in seconds (exponential backoff)")
-    CONNECTION_HEALTH_CHECK_INTERVAL: int = Field(60, ge=10, le=3600, description="Health check interval in seconds")
+    CONNECTION_RETRY_ATTEMPTS: int = Field(
+        3, ge=1, le=10, description="Number of retry attempts for connection creation"
+    )
+    CONNECTION_RETRY_DELAY: float = Field(
+        1.0, ge=0.1, le=10.0, description="Initial retry delay in seconds (exponential backoff)"
+    )
+    CONNECTION_HEALTH_CHECK_INTERVAL: int = Field(
+        60, ge=10, le=3600, description="Health check interval in seconds"
+    )
 
 
 # Global settings instance
 # Initialize settings with fallback
 try:
-    settings = Settings()
+    settings = Settings()  # type: ignore[call-arg]
 except Exception as e:
     import warnings
 
     warnings.warn(f"Configuration Error: {e}. Using environment variables with defaults.")
     # Create a simple settings object from environment variables
-    import os
     from dotenv import load_dotenv
 
     load_dotenv()
@@ -262,7 +277,7 @@ except Exception as e:
             self.SQL_SERVER_HOST = os.getenv("SQL_SERVER_HOST", "192.168.1.109")
             self.SQL_SERVER_PORT = int(os.getenv("SQL_SERVER_PORT", 1433))
             self.SQL_SERVER_DATABASE = os.getenv("SQL_SERVER_DATABASE", "")
-            self.SQL_SERVER_USER = os.getenv("SQL_SERVER_USER")
+            self.SQL_SERVER_USER = os.getenv("SQL_SERVER_USER", "readonly_user")
             self.SQL_SERVER_PASSWORD = os.getenv("SQL_SERVER_PASSWORD")
             jwt_secret = os.getenv("JWT_SECRET")
             if not jwt_secret:
@@ -297,66 +312,55 @@ except Exception as e:
             self.APP_NAME = os.getenv("APP_NAME", "Stock Count API")
             self.APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
 
-    settings = FallbackSettings()
+    settings = FallbackSettings()  # type: ignore[assignment]
+
 
 # SECURITY CHECKS (fail-fast in non-debug environments)
-try:
-    debug_mode = getattr(settings, "DEBUG", False)
-    jwt_secret = getattr(settings, "JWT_SECRET", None)
-    jwt_refresh = getattr(settings, "JWT_REFRESH_SECRET", None)
-    # Detect placeholder values used in codebase
-    placeholders = {
-        "REPLACE_WITH_A_SECURE_64_CHAR_SECRET",
-        "REPLACE_WITH_A_SECURE_64_CHAR_REFRESH_SECRET",
-        "your-secret-key-here",
-        "your-refresh-secret-key-here",
-        "change-me-in-production"
-    }
+def _validate_secret(secret_name, secret_value, placeholders, env_name):
+    if not secret_value or secret_value in placeholders:
+        raise RuntimeError(
+            f"SECURITY ERROR: Insecure {secret_name} in {env_name}! "
+            f"Set ENVIRONMENT={env_name} and provide secure {secret_name} via environment variable. "
+            "Run `python backend/utils/secret_generator.py --write` to generate secure secrets."
+        )
 
-    # Environment-based security enforcement
-    environment = getattr(settings, "ENVIRONMENT", os.getenv("ENVIRONMENT", "development")).lower()
-    is_production = environment == "production"
-    is_staging = environment == "staging"
 
-    if is_production and not debug_mode:
-        if not jwt_secret or jwt_secret in placeholders:
-            raise RuntimeError(
-                "SECURITY ERROR: Insecure JWT_SECRET in production! "
-                "Set ENVIRONMENT=production and provide secure JWT_SECRET via environment variable. "
-                "Run `python scripts/generate_secrets.py --write` to generate secure secrets."
-            )
-        if not jwt_refresh or jwt_refresh in placeholders:
-            raise RuntimeError(
-                "SECURITY ERROR: Insecure JWT_REFRESH_SECRET in production! "
-                "Set ENVIRONMENT=production and provide secure JWT_REFRESH_SECRET via environment variable. "
-                "Run `python scripts/generate_secrets.py --write` to generate secure secrets."
-            )
-        logger.info("✅ Production mode: Security checks passed")
-    elif is_staging:
-        # Staging: Require secure secrets (enforce like production)
-        if not jwt_secret or jwt_secret in placeholders:
-            raise RuntimeError(
-                "SECURITY ERROR: Insecure JWT_SECRET in staging! "
-                "Set ENVIRONMENT=staging and provide secure JWT_SECRET via environment variable. "
-                "Run `python scripts/generate_secrets.py --write` to generate secure secrets."
-            )
-        if not jwt_refresh or jwt_refresh in placeholders:
-            raise RuntimeError(
-                "SECURITY ERROR: Insecure JWT_REFRESH_SECRET in staging! "
-                "Set ENVIRONMENT=staging and provide secure JWT_REFRESH_SECRET via environment variable. "
-                "Run `python scripts/generate_secrets.py --write` to generate secure secrets."
-            )
-        logger.info("✅ Staging mode: Security checks passed")
-    else:
-        # Development mode - just warn
-        if jwt_secret in placeholders:
-            logger.warning("⚠️  DEVELOPMENT: Using default JWT_SECRET. Change for production!")
-        if jwt_refresh in placeholders:
-            logger.warning(
-                "⚠️  DEVELOPMENT: Using default JWT_REFRESH_SECRET. Change for production!"
-            )
-except Exception as e:
-    # If we are in a constrained environment (tests/dev) allow continuing
-    if str(getattr(settings, "DEBUG", False)).lower() not in ("1", "true"):
-        logger.warning(f"Security check warning: {e}")
-        # Don't raise in development
+def perform_security_checks(settings_obj):
+    try:
+        debug_mode = getattr(settings_obj, "DEBUG", False)
+        jwt_secret = getattr(settings_obj, "JWT_SECRET", None)
+        jwt_refresh = getattr(settings_obj, "JWT_REFRESH_SECRET", None)
+
+        placeholders = {
+            "REPLACE_WITH_A_SECURE_64_CHAR_SECRET",
+            "REPLACE_WITH_A_SECURE_64_CHAR_REFRESH_SECRET",
+            "your-secret-key-here",
+            "your-refresh-secret-key-here",
+            "change-me-in-production",
+        }
+
+        environment = getattr(
+            settings_obj, "ENVIRONMENT", os.getenv("ENVIRONMENT", "development")
+        ).lower()
+        is_production = environment == "production"
+        is_staging = environment == "staging"
+
+        if (is_production or is_staging) and not debug_mode:
+            _validate_secret("JWT_SECRET", jwt_secret, placeholders, environment)
+            _validate_secret("JWT_REFRESH_SECRET", jwt_refresh, placeholders, environment)
+            logger.info(f"✅ {environment.capitalize()} mode: Security checks passed")
+        else:
+            # Development mode - just warn
+            if jwt_secret in placeholders:
+                logger.warning("⚠️  DEVELOPMENT: Using default JWT_SECRET. Change for production!")
+            if jwt_refresh in placeholders:
+                logger.warning(
+                    "⚠️  DEVELOPMENT: Using default JWT_REFRESH_SECRET. Change for production!"
+                )
+
+    except Exception as e:
+        if str(getattr(settings_obj, "DEBUG", False)).lower() not in ("1", "true"):
+            logger.warning(f"Security check warning: {e}")
+
+
+perform_security_checks(settings)

@@ -54,20 +54,10 @@ export const validateSessionName = (
 
 export const normalizeBarcode = (barcode: string): string => {
   const trimmed = barcode.trim();
-
-  if (trimmed.match(/^\d+$/)) {
-    if (trimmed.length < 6) {
-      return trimmed.padStart(6, '0');
-    }
-
-    if (trimmed.length > 6) {
-      const trimmedNoZeros = trimmed.replace(/^0+/, '');
-      if (trimmedNoZeros.length <= 6 && trimmedNoZeros.length > 0) {
-        return trimmedNoZeros.padStart(6, '0');
-      }
-    }
+  // Pad numeric barcodes to 6 digits if they are shorter
+  if (trimmed.match(/^\d+$/) && trimmed.length < 6) {
+    return trimmed.padStart(6, '0');
   }
-
   return trimmed;
 };
 
@@ -109,4 +99,3 @@ export const validateMRP = (value: string): ValidationResult<number> => {
 
   return { valid: true, value: parsed };
 };
-

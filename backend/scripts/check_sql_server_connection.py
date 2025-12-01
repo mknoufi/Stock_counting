@@ -5,17 +5,18 @@ Check SQL Server Connection and Identify Local Server Path
 Helps identify the correct connection parameters for Polosys ERP database
 """
 
-import sys
 import io
+import sys
 
 # Fix Windows console encoding for Unicode characters
 if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
-import pymssql
 import socket
 from pathlib import Path
+
+import pymssql
 
 # Database file path provided by user
 DB_PATH = r"\\Server\d\Polosys ERP 7.0\DATA"
@@ -96,7 +97,6 @@ def suggest_connection_params():
     print("💡 SUGGESTED CONNECTION PARAMETERS")
     print("=" * 80)
 
-    hostname = get_local_hostname()
     server_name = DB_PATH.split("\\")[2] if "\\\\" in DB_PATH else "Server"
 
     print("\n📍 Database Location Analysis:")

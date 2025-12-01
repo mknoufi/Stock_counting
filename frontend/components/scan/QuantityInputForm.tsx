@@ -5,9 +5,8 @@
 import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Controller, Control, FieldErrors } from 'react-hook-form';
-import { ScanFormData } from '@/types/scan';
+import { ScanFormData , NormalizedMrpVariant } from '@/types/scan';
 import { MRPVariantSelector } from './MRPVariantSelector';
-import { NormalizedMrpVariant } from '@/types/scan';
 import { formatMrpValue } from '@/utils/scanUtils';
 
 interface QuantityInputFormProps {
@@ -207,6 +206,8 @@ export const QuantityInputForm: React.FC<QuantityInputFormProps> = React.memo(({
   );
 });
 
+QuantityInputForm.displayName = 'QuantityInputForm';
+
 const styles = StyleSheet.create({
   countingSection: {
     marginBottom: 16,
@@ -283,4 +284,3 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 });
-

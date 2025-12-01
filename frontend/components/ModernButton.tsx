@@ -15,12 +15,10 @@ import React from 'react';
 import {
   TouchableOpacity,
   Text,
-  View,
   ActivityIndicator,
   StyleSheet,
   ViewStyle,
   TextStyle,
-  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -30,7 +28,6 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  interpolate,
 } from 'react-native-reanimated';
 import { modernColors, modernTypography, modernSpacing, modernBorderRadius, modernShadows, modernAnimations } from '../styles/modernDesignSystem';
 
@@ -223,7 +220,7 @@ export const ModernButton: React.FC<ModernButtonProps> = ({
   // Render icon
   const renderIcon = () => {
     if (!icon || loading) return null;
-    
+
     return (
       <Ionicons
         name={icon}
@@ -273,7 +270,7 @@ export const ModernButton: React.FC<ModernButtonProps> = ({
           accessibilityState={{ disabled: disabled || loading }}
         >
           <LinearGradient
-            colors={colors as readonly [string, string, ...string[]]}
+            colors={colors as unknown as readonly [string, string, ...string[]]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.gradient}
@@ -354,4 +351,3 @@ const styles = StyleSheet.create({
 });
 
 export default ModernButton;
-

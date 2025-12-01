@@ -5,7 +5,8 @@ Tracks and stores user activities and application events for audit purposes
 
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
+
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 

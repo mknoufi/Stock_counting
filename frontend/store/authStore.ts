@@ -24,7 +24,7 @@ interface User {
   permissions: string[];
 }
 
-interface AuthState {
+export interface AuthState {
   user: User | null;
   token: string | null;
   refreshToken: string | null;
@@ -68,112 +68,113 @@ export const useAuthStore = create<AuthState>((set) => ({
         console.log('Login response received');
       }
 
-            // Extract from ApiResponse wrapper: { success, data: { access_token, ... }, error }
-            const responseData = response.data.data || response.data;
-            const { access_token, refresh_token, user } = responseData;
+      // Extract from ApiResponse wrapper: { success, data: { access_token, ... }, error }
+      const responseData = response.data.data || response.data;
+      const { access_token, refresh_token, user } = responseData;
 
-            if (!access_token || !user) {
-              throw new Error('Invalid response from server');
-            }
+      if (!access_token || !user) {
+        throw new Error('Invalid response from server');
+      }
 
-            // Fetch user permissions from /api/auth/me or use permissions from login response
-            let userWithPermissions = user;
-            if (!user.permissions) {
-              try {
-                const apiUrl = await getAPIURL();
-                const meResponse = await axios.get(`${apiUrl}/auth/me`, {
-                  headers: {
-                    'Authorization': `Bearer ${access_token}`,
-                  },
-                });
-                userWithPermissions = {
-                  ...user,
-                  permissions: meResponse.data.permissions || [],
-                };
-              } catch (permError) {
-                console.warn('Failed to fetch permissions, using empty array:', permError);
-                userWithPermissions = {
-                  ...user,
-                  permissions: [],
-                };
-              }
-            }
-
-            // Store tokens and user data with permissions
-            // Security: Don't log tokens in production
-            if (__DEV__) {
-              console.log('Storing access_token:', access_token?.substring(0, 50) + '...');
-              console.log('Storing refresh_token:', refresh_token ? '***' : 'null');
-            }
-            await setOrRemoveItem('token', access_token);
-            await setOrRemoveItem('refresh_token', refresh_token);
-            await storage.set('user', userWithPermissions);
-
-            set({ user: userWithPermissions, token: access_token, refreshToken: refresh_token });
-            if (__DEV__) {
-              console.log('Login successful:', userWithPermissions.username, 'with', userWithPermissions.permissions.length, 'permissions');
-            }
-            return true;
-        } catch (error: unknown) {
-          // Use warn to avoid red screen in Expo Go
-          console.warn('Login error:', error);
-          
-          // Type guard for axios error with response
-          const isAxiosError = (err: unknown): err is { 
-            response?: { 
-              data?: any; 
-              status?: number; 
-            }; 
-            code?: string; 
-            message?: string; 
-          } => {
-            return typeof err === 'object' && err !== null;
+      // Fetch user permissions from /api/auth/me or use permissions from login response
+      let userWithPermissions = user;
+      if (!user.permissions) {
+        try {
+          const apiUrl = await getAPIURL();
+          const meResponse = await axios.get(`${apiUrl}/auth/me`, {
+            headers: {
+              'Authorization': `Bearer ${access_token}`,
+            },
+          });
+          userWithPermissions = {
+            ...user,
+            permissions: meResponse.data.permissions || [],
           };
-          
-          if (error instanceof Error) {
-            console.error('Error details:', {
-              message: error.message,
-              name: error.name,
-            });
-          }
-
-          // Use structured error response if available
-          if (isAxiosError(error) && error.response?.data) {
-            const errorData = error.response.data;
-            if (typeof errorData === 'object' && errorData.message) {
-              throw new Error(errorData.message);
-            } else if (typeof errorData === 'object' && errorData.detail) {
-              if (typeof errorData.detail === 'object' && errorData.detail.message) {
-                throw new Error(errorData.detail.message);
-              } else if (typeof errorData.detail === 'string') {
-                throw new Error(errorData.detail);
-              }
-            }
-          }
-
-          // Fallback to code-based messages
-          if (isAxiosError(error)) {
-            if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-              throw new Error('Connection timeout. Please check if the backend server is running.');
-            } else if (error.code === 'ECONNREFUSED' || !error.response || error.message?.includes('Network Error')) {
-              const backendUrl = await getBackendURL();
-              throw new Error(`Cannot connect to server at ${backendUrl}.\n\nIf on mobile device, use your computer's IP address instead of localhost.\nSet EXPO_PUBLIC_BACKEND_URL=http://YOUR_IP:8001 in the .env file.`);
-            } else if (error.response?.status === 401) {
-              throw new Error('Invalid username or password');
-            } else if (error.response?.status === 429) {
-              throw new Error('Too many requests. Please try again later.');
-            } else {
-              throw new Error(error.response?.data?.detail?.message || error.response?.data?.detail || error.response?.data?.message || error.message || 'Login failed');
-            }
-          }
-          
-          // Fallback for non-axios errors
-          if (error instanceof Error) {
-            throw new Error(error.message);
-          }
-          
-          throw new Error('Login failed');
+        } catch (permError) {
+          console.warn('Failed to fetch permissions, using empty array:', permError);
+          userWithPermissions = {
+            ...user,
+            permissions: [],
+          };
         }
+      }
+
+      // Store tokens and user data with permissions
+      // Security: Don't log tokens in production
+      if (__DEV__) {
+        console.log('Storing access_token:', access_token?.substring(0, 50) + '...');
+        console.log('Storing refresh_token:', refresh_token ? '***' : 'null');
+      }
+      await setOrRemoveItem('token', access_token);
+      await setOrRemoveItem('refresh_token', refresh_token);
+      await storage.set('user', userWithPermissions);
+
+      set({ user: userWithPermissions, token: access_token, refreshToken: refresh_token });
+      if (__DEV__) {
+        console.log('Login successful:', userWithPermissions.username, 'with', userWithPermissions.permissions.length, 'permissions');
+      }
+      return true;
+    } catch (error: unknown) {
+      // Use warn to avoid red screen in Expo Go
+      console.warn('Login error:', error);
+
+      // Type guard for axios error with response
+      const isAxiosError = (err: unknown): err is {
+        response?: {
+          data?: any;
+          status?: number;
+        };
+        code?: string;
+        message?: string;
+      } => {
+        return typeof err === 'object' && err !== null;
+      };
+
+      if (error instanceof Error) {
+        // Use log instead of error to avoid RedBox in Expo
+        console.log('Error details:', {
+          message: error.message,
+          name: error.name,
+        });
+      }
+
+      // Use structured error response if available
+      if (isAxiosError(error) && error.response?.data) {
+        const errorData = error.response.data;
+        if (typeof errorData === 'object' && errorData.message) {
+          throw new Error(errorData.message);
+        } else if (typeof errorData === 'object' && errorData.detail) {
+          if (typeof errorData.detail === 'object' && errorData.detail.message) {
+            throw new Error(errorData.detail.message);
+          } else if (typeof errorData.detail === 'string') {
+            throw new Error(errorData.detail);
+          }
+        }
+      }
+
+      // Fallback to code-based messages
+      if (isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          throw new Error('Connection timeout. Please check if the backend server is running.');
+        } else if (error.code === 'ECONNREFUSED' || !error.response || error.message?.includes('Network Error')) {
+          const backendUrl = await getBackendURL();
+          throw new Error(`Cannot connect to server at ${backendUrl}.\n\nIf on mobile device, use your computer's IP address instead of localhost.\nSet EXPO_PUBLIC_BACKEND_URL=http://YOUR_IP:8001 in the .env file.`);
+        } else if (error.response?.status === 401) {
+          throw new Error('Invalid username or password');
+        } else if (error.response?.status === 429) {
+          throw new Error('Too many requests. Please try again later.');
+        } else {
+          throw new Error(error.response?.data?.detail?.message || error.response?.data?.detail || error.response?.data?.message || error.message || 'Login failed');
+        }
+      }
+
+      // Fallback for non-axios errors
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      }
+
+      throw new Error('Login failed');
+    }
   },
 
   logout: async () => {
@@ -190,11 +191,11 @@ export const useAuthStore = create<AuthState>((set) => ({
             },
           });
         } catch (error: unknown) {
-          console.error('Error revoking token:', error);
+          console.warn('Error revoking token:', error);
         }
       }
     } catch (error: unknown) {
-      console.error('Logout error:', error);
+      console.warn('Logout error:', error);
     } finally {
       await Promise.all([
         storage.remove('token'),
@@ -244,7 +245,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
       return access_token;
     } catch (error: any) {
-      console.error('Token refresh error:', error);
+      console.warn('Token refresh error:', error);
       // If refresh fails, logout user
       await useAuthStore.getState().logout();
       throw error;
@@ -285,7 +286,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       set({ user: null, token: null, refreshToken: null, isLoading: false });
     } catch (error: unknown) {
-      console.error('Load auth error:', error);
+      console.warn('Load auth error:', error);
       set({ isLoading: false });
     }
   },

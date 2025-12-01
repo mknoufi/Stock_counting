@@ -8,9 +8,11 @@ import { StatusBar } from 'expo-status-bar';
 import { haptics } from '../../services/haptics';
 import { flags } from '../../constants/flags';
 import { PullToRefresh } from '../../components/PullToRefresh';
-import BottomSheet from '../../components/ui/BottomSheet';
+import { BottomSheet } from '../../components/ui/BottomSheet';
 import { SkeletonList } from '../../components/LoadingSkeleton';
-import SwipeableRow from '../../components/SwipeableRow';
+import { SwipeableRow } from '../../components/SwipeableRow';
+import { StaffLayout } from '../../components/layout/StaffLayout';
+import Animated, { FadeInUp } from 'react-native-reanimated';
 
 export default function HistoryScreen() {
   const params = useLocalSearchParams();
@@ -35,7 +37,7 @@ export default function HistoryScreen() {
   const [filtersOpen, setFiltersOpen] = React.useState(false);
   const [showApprovedOnly, setShowApprovedOnly] = React.useState<boolean>(!!initialApproved);
 
-  const loadCountLines = async () => {
+  const loadCountLines = React.useCallback(async () => {
     try {
       const data = await getCountLines(sessionId as string);
       setCountLines(showApprovedOnly ? data.filter((d: any) => d.status === 'approved') : data);
@@ -48,11 +50,11 @@ export default function HistoryScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [sessionId, showApprovedOnly]);
 
   React.useEffect(() => {
     loadCountLines();
-  }, []);
+  }, [loadCountLines]);
 
   // Keep state in sync if URL param changes (e.g., deep link navigation)
   React.useEffect(() => {
@@ -92,33 +94,33 @@ export default function HistoryScreen() {
 
 
 
-  const renderCountLine = ({ item }: any) => {
+  const renderCountLine = ({ item, index }: { item: CountLine; index: number }) => {
     const varianceColor = item.variance === 0 ? '#4CAF50' : '#FF5252';
     const statusColor = item.status === 'approved' ? '#4CAF50' : item.status === 'rejected' ? '#FF5252' : '#FF9800';
 
-    const Card = (
+    const CardContent = (
       <View style={styles.countCard}>
         <View style={styles.cardHeader}>
-          <Text style={styles.itemName}>{item.item_name}</Text>
+          <Text style={styles.itemName}>{item.item_name || 'Unknown Item'}</Text>
           <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+            <Text style={styles.statusText}>{(item.status || 'pending').toUpperCase()}</Text>
           </View>
         </View>
 
-        <Text style={styles.itemCode}>Code: {item.item_code}</Text>
+        <Text style={styles.itemCode}>Code: {item.item_code || 'N/A'}</Text>
 
         <View style={styles.qtyRow}>
           <View style={styles.qtyItem}>
             <Text style={styles.qtyLabel}>ERP</Text>
-            <Text style={styles.qtyValue}>{item.erp_qty}</Text>
+            <Text style={styles.qtyValue}>{item.erp_qty ?? 0}</Text>
           </View>
           <View style={styles.qtyItem}>
             <Text style={styles.qtyLabel}>Counted</Text>
-            <Text style={styles.qtyValue}>{item.counted_qty}</Text>
+            <Text style={styles.qtyValue}>{item.counted_qty ?? 0}</Text>
           </View>
           <View style={styles.qtyItem}>
             <Text style={styles.qtyLabel}>Variance</Text>
-            <Text style={[styles.qtyValue, { color: varianceColor }]}>{item.variance}</Text>
+            <Text style={[styles.qtyValue, { color: varianceColor }]}>{item.variance ?? 0}</Text>
           </View>
         </View>
 
@@ -139,6 +141,14 @@ export default function HistoryScreen() {
       </View>
     );
 
+    const AnimatedCard = flags.enableAnimations ? (
+      <Animated.View entering={FadeInUp.delay(index * 50).springify().damping(12)}>
+        {CardContent}
+      </Animated.View>
+    ) : (
+      CardContent
+    );
+
     if (flags.enableSwipeActions && Platform.OS !== 'web') {
       return (
         <SwipeableRow
@@ -153,26 +163,27 @@ export default function HistoryScreen() {
             Alert.alert('Flagged', `Item ${item.item_code} flagged for review.`);
           }}
         >
-          {Card}
+          {AnimatedCard}
         </SwipeableRow>
       );
     }
 
-    return Card;
+    return AnimatedCard;
   };
 
   return (
-    <View style={styles.container}>
+    <StaffLayout
+      title="Count History"
+      headerActions={[
+        {
+          icon: 'options-outline',
+          label: 'Filters',
+          onPress: () => setFiltersOpen(true),
+        },
+      ]}
+      screenVariant="default"
+    >
       <StatusBar style="light" />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Count History</Text>
-        <TouchableOpacity onPress={() => setFiltersOpen(true)} style={styles.backButton}>
-          <Ionicons name="options-outline" size={22} color="#fff" />
-        </TouchableOpacity>
-      </View>
       {loading && !refreshing ? (
         <View style={{ padding: 16 }}>
           <SkeletonList itemHeight={120} count={6} />
@@ -214,7 +225,7 @@ export default function HistoryScreen() {
           <Text style={[styles.filterChipText, showApprovedOnly && styles.filterChipTextActive]}>Approved Only</Text>
         </TouchableOpacity>
       </BottomSheet>
-    </View>
+    </StaffLayout >
   );
 }
 
